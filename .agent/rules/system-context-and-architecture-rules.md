@@ -1,4 +1,8 @@
-# AGENTS.md
+---
+trigger: always_on
+---
+
+# System Context & Architecture Rules
 
 ## プロジェクト概要
 TRPGのデータ及びセッション管理ツール。Notionの柔軟性と、専用ツールの計算・リアルタイム性を両立する。
