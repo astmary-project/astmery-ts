@@ -6,6 +6,7 @@ import { Dices } from 'lucide-react';
 import { CharacterLogEntry, CharacterState } from '../domain/CharacterLog';
 import { STANDARD_STAT_ORDER, STAT_LABELS } from '../domain/constants';
 import { DiceRoller } from '../domain/DiceRoller';
+import { CharacterHeader } from './CharacterHeader';
 import { DicePanel } from './DicePanel';
 import { LogEditor } from './LogEditor';
 
@@ -179,160 +180,164 @@ export const CharacterSheet = ({ character, state, logs, onAddLog }: CharacterSh
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-6xl mx-auto p-6">
-            {/* Left Column: Character Sheet (8 cols) */}
-            <div className="lg:col-span-8 space-y-6">
-                <Tabs defaultValue="status" className="w-full">
-                    <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="status">ステータス</TabsTrigger>
-                        <TabsTrigger value="skills">スキル</TabsTrigger>
-                        <TabsTrigger value="equipment">装備</TabsTrigger>
-                        <TabsTrigger value="history">履歴</TabsTrigger>
-                    </TabsList>
+        <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6">
+            <CharacterHeader name={character.name} avatarUrl={character.avatarUrl} bio={character.bio} specialtyElements={character.specialtyElements} exp={state.exp} />
 
-                    {/* Status Tab */}
-                    <TabsContent value="status" className="space-y-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>能力値</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {renderStats()}
-                            </CardContent>
-                        </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Left Column: Character Sheet (8 cols) */}
+                <div className="lg:col-span-8 space-y-6">
+                    <Tabs defaultValue="status" className="w-full">
+                        <TabsList className="grid w-full grid-cols-4">
+                            <TabsTrigger value="status">ステータス</TabsTrigger>
+                            <TabsTrigger value="skills">スキル</TabsTrigger>
+                            <TabsTrigger value="equipment">装備</TabsTrigger>
+                            <TabsTrigger value="history">履歴</TabsTrigger>
+                        </TabsList>
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>タグ・状態</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex flex-wrap gap-2">
-                                    {Array.from(state.tags).map(tag => (
-                                        <span key={tag} className="px-2 py-1 bg-primary/10 text-primary rounded text-sm border border-primary/20">
-                                            {tag}
-                                        </span>
-                                    ))}
-                                    {state.tags.size === 0 && <span className="text-muted-foreground italic">なし</span>}
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {state.resources.length > 0 && (
+                        {/* Status Tab */}
+                        <TabsContent value="status" className="space-y-4">
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>リソース・ゲージ</CardTitle>
+                                    <CardTitle>能力値</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {state.resources.map(resource => (
-                                            <div key={resource.id} className="p-3 border rounded-lg bg-card">
-                                                <div className="text-sm font-medium text-muted-foreground mb-1">{resource.name}</div>
-                                                <div className="flex items-end gap-2">
-                                                    <span className="text-2xl font-bold font-mono">{resource.initial}</span>
-                                                    <span className="text-sm text-muted-foreground mb-1">/ {resource.max}</span>
+                                    {renderStats()}
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>タグ・状態</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="flex flex-wrap gap-2">
+                                        {Array.from(state.tags).map(tag => (
+                                            <span key={tag} className="px-2 py-1 bg-primary/10 text-primary rounded text-sm border border-primary/20">
+                                                {tag}
+                                            </span>
+                                        ))}
+                                        {state.tags.size === 0 && <span className="text-muted-foreground italic">なし</span>}
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {state.resources.length > 0 && (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>リソース・ゲージ</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {state.resources.map(resource => (
+                                                <div key={resource.id} className="p-3 border rounded-lg bg-card">
+                                                    <div className="text-sm font-medium text-muted-foreground mb-1">{resource.name}</div>
+                                                    <div className="flex items-end gap-2">
+                                                        <span className="text-2xl font-bold font-mono">{resource.initial}</span>
+                                                        <span className="text-sm text-muted-foreground mb-1">/ {resource.max}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </TabsContent>
+
+                        {/* Skills Tab */}
+                        <TabsContent value="skills">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>スキル一覧</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {/* Dynamically render skill sections based on types present */}
+                                    {(() => {
+                                        // Get all unique types and sort them (Standard types first)
+                                        const standardTypes = ['Active', 'Passive', 'Spell', 'Other'];
+                                        const allTypes = Array.from(new Set(state.skills.map(s => s.type)));
+                                        const sortedTypes = allTypes.sort((a, b) => {
+                                            const indexA = standardTypes.indexOf(a);
+                                            const indexB = standardTypes.indexOf(b);
+                                            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                                            if (indexA !== -1) return -1;
+                                            if (indexB !== -1) return 1;
+                                            return a.localeCompare(b);
+                                        });
+
+                                        return sortedTypes.map(type => (
+                                            <div key={type}>
+                                                {renderSkillSection(type, state.skills.filter(s => s.type === type))}
+                                            </div>
+                                        ));
+                                    })()}
+
+                                    {state.skills.length === 0 && <p className="text-muted-foreground text-center py-8">スキルを習得していません。</p>}
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        {/* Equipment Tab */}
+                        <TabsContent value="equipment">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Equipment</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        {state.equipment.map((item) => (
+                                            <div key={item.id} className="flex items-center gap-4 border p-4 rounded-lg">
+                                                <div className="flex-1">
+                                                    <h4 className="font-bold">{item.name}</h4>
+                                                    <p className="text-sm text-muted-foreground">{item.type}</p>
+                                                </div>
+                                                <div className="text-sm text-muted-foreground max-w-md">
+                                                    {item.description}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {state.equipment.length === 0 && <p className="text-muted-foreground text-center py-8">No equipment equipped.</p>}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        {/* History Tab */}
+                        <TabsContent value="history" className="space-y-6">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>History Log</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-2">
+                                        {[...logs].reverse().map((log) => (
+                                            <div key={log.id} className="text-sm border-b pb-2 last:border-0">
+                                                <div className="flex justify-between text-muted-foreground text-xs mb-1">
+                                                    <span>{new Date(log.timestamp).toLocaleString()}</span>
+                                                    <span className="font-mono">{log.type}</span>
+                                                </div>
+                                                <div>
+                                                    {log.type === 'GROWTH' && `Growth: ${log.statKey} +${log.value}`}
+                                                    {log.type === 'GAIN_EXP' && `Gained ${log.value} EXP`}
+                                                    {log.type === 'SPEND_EXP' && `Spent ${log.value} EXP`}
+                                                    {log.type === 'LEARN_SKILL' && `Learned Skill: ${log.skill?.name || log.stringValue || 'Unknown'}`}
+                                                    {log.type === 'EQUIP' && `Equipped: ${log.item?.name || log.stringValue || 'Unknown'}`}
+                                                    {log.type === 'ROLL' && `Rolled: ${log.diceRoll?.result} (${log.diceRoll?.formula})`}
+                                                    {log.description && <span className="text-muted-foreground ml-2">- {log.description}</span>}
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 </CardContent>
                             </Card>
-                        )}
-                    </TabsContent>
+                        </TabsContent>
+                    </Tabs>
+                </div>
 
-                    {/* Skills Tab */}
-                    <TabsContent value="skills">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>スキル一覧</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {/* Dynamically render skill sections based on types present */}
-                                {(() => {
-                                    // Get all unique types and sort them (Standard types first)
-                                    const standardTypes = ['Active', 'Passive', 'Spell', 'Other'];
-                                    const allTypes = Array.from(new Set(state.skills.map(s => s.type)));
-                                    const sortedTypes = allTypes.sort((a, b) => {
-                                        const indexA = standardTypes.indexOf(a);
-                                        const indexB = standardTypes.indexOf(b);
-                                        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                                        if (indexA !== -1) return -1;
-                                        if (indexB !== -1) return 1;
-                                        return a.localeCompare(b);
-                                    });
-
-                                    return sortedTypes.map(type => (
-                                        <div key={type}>
-                                            {renderSkillSection(type, state.skills.filter(s => s.type === type))}
-                                        </div>
-                                    ));
-                                })()}
-
-                                {state.skills.length === 0 && <p className="text-muted-foreground text-center py-8">スキルを習得していません。</p>}
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    {/* Equipment Tab */}
-                    <TabsContent value="equipment">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Equipment</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    {state.equipment.map((item) => (
-                                        <div key={item.id} className="flex items-center gap-4 border p-4 rounded-lg">
-                                            <div className="flex-1">
-                                                <h4 className="font-bold">{item.name}</h4>
-                                                <p className="text-sm text-muted-foreground">{item.type}</p>
-                                            </div>
-                                            <div className="text-sm text-muted-foreground max-w-md">
-                                                {item.description}
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {state.equipment.length === 0 && <p className="text-muted-foreground text-center py-8">No equipment equipped.</p>}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    {/* History Tab */}
-                    <TabsContent value="history" className="space-y-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>History Log</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-2">
-                                    {[...logs].reverse().map((log) => (
-                                        <div key={log.id} className="text-sm border-b pb-2 last:border-0">
-                                            <div className="flex justify-between text-muted-foreground text-xs mb-1">
-                                                <span>{new Date(log.timestamp).toLocaleString()}</span>
-                                                <span className="font-mono">{log.type}</span>
-                                            </div>
-                                            <div>
-                                                {log.type === 'GROWTH' && `Growth: ${log.statKey} +${log.value}`}
-                                                {log.type === 'GAIN_EXP' && `Gained ${log.value} EXP`}
-                                                {log.type === 'SPEND_EXP' && `Spent ${log.value} EXP`}
-                                                {log.type === 'LEARN_SKILL' && `Learned Skill: ${log.skill?.name || log.stringValue || 'Unknown'}`}
-                                                {log.type === 'EQUIP' && `Equipped: ${log.item?.name || log.stringValue || 'Unknown'}`}
-                                                {log.type === 'ROLL' && `Rolled: ${log.diceRoll?.result} (${log.diceRoll?.formula})`}
-                                                {log.description && <span className="text-muted-foreground ml-2">- {log.description}</span>}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-                </Tabs>
-            </div>
-
-            {/* Right Column: Tools (4 cols) */}
-            <div className="lg:col-span-4 space-y-6">
-                <DicePanel state={state} onRoll={onAddLog} />
-                <LogEditor onAddLog={onAddLog} />
+                {/* Right Column: Tools (4 cols) */}
+                <div className="lg:col-span-4 space-y-6">
+                    <DicePanel state={state} onRoll={onAddLog} />
+                    <LogEditor onAddLog={onAddLog} />
+                </div>
             </div>
         </div>
     );
