@@ -1,0 +1,257 @@
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import React, { useState } from 'react';
+import { CharacterLogEntry, CharacterLogType } from '../domain/CharacterLog';
+
+interface LogEditorProps {
+    onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
+}
+
+export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
+    const [type, setType] = useState<CharacterLogType>('GROWTH');
+    const [statKey, setStatKey] = useState('Grade');
+    const [value, setValue] = useState('');
+    const [expCost, setExpCost] = useState('');
+    const [comment, setComment] = useState('');
+
+    // Skill/Item fields
+    const [name, setName] = useState('');
+    const [subtype, setSubtype] = useState('Active'); // For Skill type or Item type
+    const [description, setDescription] = useState('');
+    const [modifiersJson, setModifiersJson] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+
+        // Base log structure
+        const log: Omit<CharacterLogEntry, 'id' | 'timestamp'> = {
+            type,
+            description: comment,
+        };
+
+        if (type === 'GROWTH') {
+            const numValue = parseFloat(value);
+            if (isNaN(numValue)) return;
+            log.statKey = statKey;
+            log.value = numValue;
+        } else if (type === 'GAIN_EXP' || type === 'SPEND_EXP') {
+            const numValue = parseFloat(value);
+            if (isNaN(numValue)) return;
+            log.value = numValue;
+        } else if (type === 'LEARN_SKILL') {
+            log.skill = {
+                id: crypto.randomUUID(),
+                name: name,
+                type: subtype as any,
+                description: description,
+            };
+            if (modifiersJson) {
+                try {
+                    log.skill!.statModifiers = JSON.parse(modifiersJson);
+                } catch (e) {
+                    console.error('Invalid JSON for modifiers', e);
+                }
+            }
+        } else if (type === 'EQUIP') {
+            log.item = {
+                id: crypto.randomUUID(),
+                name: name,
+                type: subtype as any,
+                description: description,
+            };
+            if (modifiersJson) {
+                try {
+                    log.item!.statModifiers = JSON.parse(modifiersJson);
+                } catch (e) {
+                    console.error('Invalid JSON for modifiers', e);
+                }
+            }
+        }
+
+        onAddLog(log);
+
+        // Handle EXP Cost for Growth
+        if (type === 'GROWTH' && expCost) {
+            const cost = parseFloat(expCost);
+            if (!isNaN(cost) && cost > 0) {
+                onAddLog({
+                    type: 'SPEND_EXP',
+                    value: cost,
+                    description: `Cost for ${statKey} growth`,
+                });
+            }
+        }
+
+        // Reset fields
+        setValue('');
+        setExpCost('');
+        setComment('');
+        setName('');
+        setDescription('');
+        setModifiersJson('');
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Add Log</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Type</Label>
+                            <Select value={type} onValueChange={(v) => setType(v as CharacterLogType)}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="GROWTH">成長 (Growth)</SelectItem>
+                                    <SelectItem value="GAIN_EXP">経験点獲得 (Gain EXP)</SelectItem>
+                                    <SelectItem value="SPEND_EXP">経験点消費 (Spend EXP)</SelectItem>
+                                    <SelectItem value="LEARN_SKILL">スキル習得 (Learn Skill)</SelectItem>
+                                    <SelectItem value="EQUIP">装備 (Equip)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {type === 'GROWTH' && (
+                            <div className="space-y-2">
+                                <Label>Stat</Label>
+                                <div className="flex gap-2">
+                                    <Select value={statKey} onValueChange={setStatKey}>
+                                        <SelectTrigger className="w-[180px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Grade">グレード</SelectItem>
+                                            <SelectItem value="Science">科学技術力</SelectItem>
+                                            <SelectItem value="MagicKnowledge">魔術熟知</SelectItem>
+                                            <SelectItem value="Combat">戦闘能力</SelectItem>
+                                            <SelectItem value="Magic">魔力</SelectItem>
+                                            <SelectItem value="Spirit">精神</SelectItem>
+                                            <SelectItem value="Body">肉体</SelectItem>
+                                            <SelectItem value="HP">最大HP</SelectItem>
+                                            <SelectItem value="MP">最大MP</SelectItem>
+                                            <SelectItem value="Defense">防護</SelectItem>
+                                            <SelectItem value="MagicDefense">魔術防御</SelectItem>
+                                            <SelectItem value="ActionSpeed">行動速度</SelectItem>
+                                            <SelectItem value="Custom">カスタム...</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {statKey === 'Custom' && (
+                                        <Input
+                                            placeholder="Key (e.g. Crafting)"
+                                            onChange={(e) => setStatKey(e.target.value)}
+                                            className="flex-1"
+                                        />
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {(type === 'LEARN_SKILL' || type === 'EQUIP') && (
+                            <div className="space-y-2">
+                                <Label>{type === 'LEARN_SKILL' ? 'Skill Type' : 'Item Type'}</Label>
+                                <Select value={subtype} onValueChange={setSubtype}>
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {type === 'LEARN_SKILL' ? (
+                                            <>
+                                                <SelectItem value="Active">Active</SelectItem>
+                                                <SelectItem value="Passive">Passive</SelectItem>
+                                                <SelectItem value="Spell">Spell</SelectItem>
+                                                <SelectItem value="Other">Other</SelectItem>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <SelectItem value="Weapon">Weapon</SelectItem>
+                                                <SelectItem value="Armor">Armor</SelectItem>
+                                                <SelectItem value="Accessory">Accessory</SelectItem>
+                                                <SelectItem value="Focus">Focus</SelectItem>
+                                                <SelectItem value="Other">Other</SelectItem>
+                                            </>
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                    </div>
+
+                    {(type === 'GROWTH' || type === 'GAIN_EXP' || type === 'SPEND_EXP') && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Value</Label>
+                                <Input
+                                    type="number"
+                                    value={value}
+                                    onChange={(e) => setValue(e.target.value)}
+                                    placeholder="Amount (e.g. 1)"
+                                    required
+                                />
+                            </div>
+
+                            {type === 'GROWTH' && (
+                                <div className="space-y-2">
+                                    <Label>EXP Cost (Optional)</Label>
+                                    <Input
+                                        type="number"
+                                        value={expCost}
+                                        onChange={(e) => setExpCost(e.target.value)}
+                                        placeholder="Cost (e.g. 10)"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {(type === 'LEARN_SKILL' || type === 'EQUIP') && (
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label>Name</Label>
+                                <Input
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    placeholder={type === 'LEARN_SKILL' ? "Skill Name" : "Item Name"}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Description / Effects</Label>
+                                <Input
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    placeholder="Details..."
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Stat Modifiers (JSON)</Label>
+                                <Input
+                                    value={modifiersJson}
+                                    onChange={(e) => setModifiersJson(e.target.value)}
+                                    placeholder='e.g. {"Science": 1}'
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-2">
+                        <Label>Comment (Optional)</Label>
+                        <Input
+                            value={comment}
+                            onChange={(e) => setComment(e.target.value)}
+                            placeholder="Reason or details..."
+                        />
+                    </div>
+
+                    <Button type="submit" className="w-full">Add Log</Button>
+                </form>
+            </CardContent>
+        </Card>
+    );
+};
