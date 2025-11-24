@@ -52,6 +52,7 @@ export interface Skill {
     // Dynamic effects
     formulaOverrides?: Record<string, string>; // e.g., { "Defense": "Body + 5" }
     statModifiers?: Record<string, number>; // Fixed adds e.g. { "Science": 1 }
+    dynamicModifiers?: Record<string, string>; // Formula adds e.g. { "Attack": "Strength / 2" }
 }
 
 export interface Item {
@@ -62,6 +63,7 @@ export interface Item {
     // Dynamic effects
     formulaOverrides?: Record<string, string>;
     statModifiers?: Record<string, number>; // Fixed adds e.g. { "STR": 1 }
+    dynamicModifiers?: Record<string, string>; // Formula adds e.g. { "Weight": "Strength * 2" }
     // Mechanics (for Weapons/Items with active use)
     roll?: string; // e.g. "2d6 + Combat"
     effect?: string; // e.g. "k20 + Combat + 5"

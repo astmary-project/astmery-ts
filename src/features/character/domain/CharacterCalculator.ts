@@ -68,6 +68,12 @@ export class CharacterCalculator {
             if (item.formulaOverrides) {
                 Object.assign(formulas, item.formulaOverrides);
             }
+            if (item.dynamicModifiers) {
+                for (const [key, formula] of Object.entries(item.dynamicModifiers)) {
+                    const bonus = this.evaluateFormula(formula, state);
+                    state.stats[key] = (state.stats[key] || 0) + bonus;
+                }
+            }
         }
 
         // Apply Skill Modifiers and Overrides
@@ -79,6 +85,12 @@ export class CharacterCalculator {
             }
             if (skill.formulaOverrides) {
                 Object.assign(formulas, skill.formulaOverrides);
+            }
+            if (skill.dynamicModifiers) {
+                for (const [key, formula] of Object.entries(skill.dynamicModifiers)) {
+                    const bonus = this.evaluateFormula(formula, state);
+                    state.stats[key] = (state.stats[key] || 0) + bonus;
+                }
             }
         }
 

@@ -24,6 +24,7 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
     const [customSubtype, setCustomSubtype] = useState(''); // For custom skill type input
     const [description, setDescription] = useState('');
     const [modifiersJson, setModifiersJson] = useState('');
+    const [dynamicModifiersJson, setDynamicModifiersJson] = useState('');
     const [isMainStat, setIsMainStat] = useState(false);
 
     // Skill specific fields
@@ -68,6 +69,13 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                     console.error('Invalid JSON for modifiers', e);
                 }
             }
+            if (dynamicModifiersJson) {
+                try {
+                    log.skill!.dynamicModifiers = JSON.parse(dynamicModifiersJson);
+                } catch (e) {
+                    console.error('Invalid JSON for dynamic modifiers', e);
+                }
+            }
         } else if (type === 'EQUIP') {
             log.item = {
                 id: crypto.randomUUID(),
@@ -83,6 +91,13 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                     log.item!.statModifiers = JSON.parse(modifiersJson);
                 } catch (e) {
                     console.error('Invalid JSON for modifiers', e);
+                }
+            }
+            if (dynamicModifiersJson) {
+                try {
+                    log.item!.dynamicModifiers = JSON.parse(dynamicModifiersJson);
+                } catch (e) {
+                    console.error('Invalid JSON for dynamic modifiers', e);
                 }
             }
         } else if (type === 'REGISTER_STAT_LABEL') {
@@ -119,6 +134,7 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
         setName('');
         setDescription('');
         setModifiersJson('');
+        setDynamicModifiersJson('');
         setIsMainStat(false);
         setTiming('');
         setRange('');
@@ -367,6 +383,14 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                                     value={modifiersJson}
                                     onChange={(e) => setModifiersJson(e.target.value)}
                                     placeholder='e.g. {"Science": 1}'
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Dynamic Modifiers (JSON)</Label>
+                                <Input
+                                    value={dynamicModifiersJson}
+                                    onChange={(e) => setDynamicModifiersJson(e.target.value)}
+                                    placeholder='e.g. {"Attack": "Strength / 2"}'
                                 />
                             </div>
                         </div>

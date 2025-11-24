@@ -155,6 +155,29 @@ describe('CharacterCalculator', () => {
         expect(state.derivedStats['Defense']).toBe(15);
     });
 
+    it('should calculate dynamic modifiers', () => {
+        const logs: CharacterLogEntry[] = [
+            { id: '1', type: 'GROWTH', timestamp: 1, statKey: 'Strength', value: 10 },
+            // Skill that adds half Strength to Attack
+            {
+                id: '2',
+                type: 'LEARN_SKILL',
+                timestamp: 2,
+                skill: {
+                    id: 'muscle_power',
+                    name: 'Muscle Power',
+                    type: 'Passive',
+                    description: '',
+                    dynamicModifiers: { 'Attack': 'Strength / 2' }
+                }
+            }
+        ];
+        const state = CharacterCalculator.calculateState(logs);
+
+        // Attack = 10 / 2 = 5
+        expect(state.stats['Attack']).toBe(5);
+    });
+
     it('should manage skills', () => {
         const logs: CharacterLogEntry[] = [
             {
