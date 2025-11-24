@@ -303,6 +303,7 @@ export const CharacterSheet = ({ character, state, logs, onAddLog }: CharacterSh
 
                         {/* History Tab */}
                         <TabsContent value="history" className="space-y-6">
+                            <LogEditor onAddLog={onAddLog} />
                             <Card>
                                 <CardHeader>
                                     <CardTitle>History Log</CardTitle>
@@ -336,7 +337,6 @@ export const CharacterSheet = ({ character, state, logs, onAddLog }: CharacterSh
                 {/* Right Column: Tools (4 cols) */}
                 <div className="lg:col-span-4 space-y-6">
                     <DicePanel state={state} onRoll={onAddLog} />
-                    <LogEditor onAddLog={onAddLog} />
                 </div>
             </div>
         </div>
