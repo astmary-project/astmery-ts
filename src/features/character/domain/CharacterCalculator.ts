@@ -15,6 +15,20 @@ export class CharacterCalculator {
         skills: [],
         exp: { total: 0, used: 0, free: 0 },
         derivedStats: {},
+        customLabels: {},
+        customMainStats: [],
+        resources: [],
+    };
+
+    /**
+     * Aggregates a list of logs into a final CharacterState.
+     */
+    private static readonly DEFAULT_FORMULAS: Record<string, string> = {
+        'HP': '(Grade + Body) * 5',
+        'MP': '(Grade + Spirit) * 5',
+        'Defense': 'Body * 2',
+        'MagicDefense': 'Spirit * 2',
+        'ActionSpeed': 'Grade + Science + 10',
     };
 
     /**
@@ -29,6 +43,9 @@ export class CharacterCalculator {
             skills: [],
             exp: { total: 0, used: 0, free: 0 },
             derivedStats: {},
+            customLabels: {},
+            customMainStats: [],
+            resources: [],
         };
 
         // Sort logs by timestamp just in case
@@ -38,26 +55,35 @@ export class CharacterCalculator {
             this.applyLog(state, log);
         }
 
-        // Apply Equipment Modifiers
+        // Prepare Formulas (Start with defaults)
+        const formulas = { ...this.DEFAULT_FORMULAS };
+
+        // Apply Equipment Modifiers and Overrides
         for (const item of state.equipment) {
             if (item.statModifiers) {
                 for (const [key, value] of Object.entries(item.statModifiers)) {
                     state.stats[key] = (state.stats[key] || 0) + value;
                 }
             }
+            if (item.formulaOverrides) {
+                Object.assign(formulas, item.formulaOverrides);
+            }
         }
 
-        // Apply Passive Skill Modifiers
+        // Apply Skill Modifiers and Overrides
         for (const skill of state.skills) {
             if (skill.statModifiers) {
                 for (const [key, value] of Object.entries(skill.statModifiers)) {
                     state.stats[key] = (state.stats[key] || 0) + value;
                 }
             }
-            if (skill.type === 'Passive' && skill.formulaOverrides) {
-                // TODO: Handle formula overrides
+            if (skill.formulaOverrides) {
+                Object.assign(formulas, skill.formulaOverrides);
             }
         }
+
+        // Calculate Derived Stats
+        this.calculateDerivedStats(state, formulas);
 
         // Calculate free exp
         state.exp.free = state.exp.total - state.exp.used;
@@ -109,6 +135,19 @@ export class CharacterCalculator {
             case 'SPEND_EXP':
                 if (log.value) state.exp.used += log.value;
                 break;
+            case 'REGISTER_STAT_LABEL':
+                if (log.statKey && log.stringValue) {
+                    state.customLabels[log.statKey] = log.stringValue;
+                    if (log.isMainStat) {
+                        state.customMainStats.push(log.statKey);
+                    }
+                }
+                break;
+            case 'REGISTER_RESOURCE':
+                if (log.resource) {
+                    state.resources.push(log.resource);
+                }
+                break;
         }
     }
 
@@ -118,10 +157,10 @@ export class CharacterCalculator {
     public static evaluateFormula(formula: string, state: CharacterState): number {
         try {
             // Create a scope with all stats
-            const scope: Record<string, number> = { ...state.stats };
-
-            // Add derived stats to scope if they exist (careful with recursion if we call this recursively)
-            // For now, we assume derived stats are calculated separately or passed in.
+            // We default missing stats to 0 to avoid errors in formulas
+            const scope: Record<string, number> = new Proxy({ ...state.stats }, {
+                get: (target, prop: string) => (prop in target ? target[prop] : 0)
+            });
 
             // Evaluate
             const result = math.evaluate(formula, scope);
@@ -134,10 +173,13 @@ export class CharacterCalculator {
 
     /**
      * Calculates derived stats based on formulas.
+     * Adds any direct stat bonuses (from Growth/Items) to the formula result.
      */
     public static calculateDerivedStats(state: CharacterState, formulas: Record<string, string>): void {
         for (const [key, formula] of Object.entries(formulas)) {
-            state.derivedStats[key] = this.evaluateFormula(formula, state);
+            const formulaResult = this.evaluateFormula(formula, state);
+            const additiveBonus = state.stats[key] || 0;
+            state.derivedStats[key] = formulaResult + additiveBonus;
         }
     }
 }

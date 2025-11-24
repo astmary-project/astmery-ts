@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import React from 'react';
 import { CharacterHeader } from './CharacterHeader';
 
 import { CharacterLogEntry, CharacterState } from '../domain/CharacterLog';
@@ -18,14 +17,13 @@ interface CharacterSheetProps {
     logs: CharacterLogEntry[];
     onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
 }
-
-export const CharacterSheet: React.FC<CharacterSheetProps> = ({ character, state, logs, onAddLog }) => {
+export const CharacterSheet = ({ character, state, logs, onAddLog }: CharacterSheetProps) => {
     // Helper to render stats grid
     const renderStats = () => {
         // Mapping for Japanese labels
-        // Use shared constants
-        const labelMap = STAT_LABELS;
-        const standardOrder = STANDARD_STAT_ORDER;
+        // Use shared constants merged with custom character labels from state
+        const labelMap = { ...STAT_LABELS, ...state.customLabels };
+        const standardOrder = [...STANDARD_STAT_ORDER, ...(state.customMainStats || [])];
 
         // Separate stats into Standard and Bonuses
         const allKeys = Array.from(new Set([...Object.keys(state.stats), ...Object.keys(state.derivedStats)]));
@@ -81,13 +79,7 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({ character, state
         );
     };
 
-    // Helper to group skills
-    const groupedSkills = {
-        Active: state.skills.filter(s => s.type === 'Active'),
-        Passive: state.skills.filter(s => s.type === 'Passive'),
-        Spell: state.skills.filter(s => s.type === 'Spell'),
-        Other: state.skills.filter(s => !['Active', 'Passive', 'Spell'].includes(s.type)),
-    };
+
 
     const renderSkillSection = (title: string, skills: typeof state.skills) => {
         if (skills.length === 0) return null;
@@ -103,6 +95,12 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({ character, state
                             <div className="flex justify-between items-start mb-2">
                                 <div>
                                     <h4 className="font-bold text-base">{skill.name}</h4>
+                                    <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
+                                        {skill.timing && <span className="bg-secondary px-1.5 py-0.5 rounded">Timing: {skill.timing}</span>}
+                                        {skill.range && <span className="bg-secondary px-1.5 py-0.5 rounded">Range: {skill.range}</span>}
+                                        {skill.target && <span className="bg-secondary px-1.5 py-0.5 rounded">Target: {skill.target}</span>}
+                                        {skill.cost && <span className="bg-secondary px-1.5 py-0.5 rounded">Cost: {skill.cost}</span>}
+                                    </div>
                                 </div>
                             </div>
                             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{skill.description}</p>
@@ -157,6 +155,27 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({ character, state
                             </div>
                         </CardContent>
                     </Card>
+
+                    {state.resources.length > 0 && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>リソース・ゲージ</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-2 gap-4">
+                                    {state.resources.map(resource => (
+                                        <div key={resource.id} className="p-3 border rounded-lg bg-card">
+                                            <div className="text-sm font-medium text-muted-foreground mb-1">{resource.name}</div>
+                                            <div className="flex items-end gap-2">
+                                                <span className="text-2xl font-bold font-mono">{resource.initial}</span>
+                                                <span className="text-sm text-muted-foreground mb-1">/ {resource.max}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
                 </TabsContent>
 
                 {/* Skills Tab */}
@@ -166,10 +185,26 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({ character, state
                             <CardTitle>スキル一覧</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            {renderSkillSection('アクティブ', groupedSkills.Active)}
-                            {renderSkillSection('パッシブ', groupedSkills.Passive)}
-                            {renderSkillSection('魔術', groupedSkills.Spell)}
-                            {renderSkillSection('その他', groupedSkills.Other)}
+                            {/* Dynamically render skill sections based on types present */}
+                            {(() => {
+                                // Get all unique types and sort them (Standard types first)
+                                const standardTypes = ['Active', 'Passive', 'Spell', 'Other'];
+                                const allTypes = Array.from(new Set(state.skills.map(s => s.type)));
+                                const sortedTypes = allTypes.sort((a, b) => {
+                                    const indexA = standardTypes.indexOf(a);
+                                    const indexB = standardTypes.indexOf(b);
+                                    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                                    if (indexA !== -1) return -1;
+                                    if (indexB !== -1) return 1;
+                                    return a.localeCompare(b);
+                                });
+
+                                return sortedTypes.map(type => (
+                                    <div key={type}>
+                                        {renderSkillSection(type, state.skills.filter(s => s.type === type))}
+                                    </div>
+                                ));
+                            })()}
 
                             {state.skills.length === 0 && <p className="text-muted-foreground text-center py-8">スキルを習得していません。</p>}
                         </CardContent>
@@ -221,8 +256,8 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({ character, state
                                             {log.type === 'GROWTH' && `Growth: ${log.statKey} +${log.value}`}
                                             {log.type === 'GAIN_EXP' && `Gained ${log.value} EXP`}
                                             {log.type === 'SPEND_EXP' && `Spent ${log.value} EXP`}
-                                            {log.type === 'LEARN_SKILL' && `Learned Skill: ${log.stringValue}`}
-                                            {log.type === 'EQUIP' && `Equipped: ${log.stringValue}`}
+                                            {log.type === 'LEARN_SKILL' && `Learned Skill: ${log.skill?.name || log.stringValue || 'Unknown'}`}
+                                            {log.type === 'EQUIP' && `Equipped: ${log.item?.name || log.stringValue || 'Unknown'}`}
                                             {log.description && <span className="text-muted-foreground ml-2">- {log.description}</span>}
                                         </div>
                                     </div>

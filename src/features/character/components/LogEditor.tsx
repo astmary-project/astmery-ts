@@ -21,8 +21,16 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
     // Skill/Item fields
     const [name, setName] = useState('');
     const [subtype, setSubtype] = useState('Active'); // For Skill type or Item type
+    const [customSubtype, setCustomSubtype] = useState(''); // For custom skill type input
     const [description, setDescription] = useState('');
     const [modifiersJson, setModifiersJson] = useState('');
+    const [isMainStat, setIsMainStat] = useState(false);
+
+    // Skill specific fields
+    const [timing, setTiming] = useState('');
+    const [range, setRange] = useState('');
+    const [target, setTarget] = useState('');
+    const [cost, setCost] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -46,8 +54,12 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
             log.skill = {
                 id: crypto.randomUUID(),
                 name: name,
-                type: subtype as any,
+                type: (subtype === 'Custom' ? customSubtype : subtype) as any,
                 description: description,
+                timing: timing,
+                range: range,
+                target: target,
+                cost: cost,
             };
             if (modifiersJson) {
                 try {
@@ -62,6 +74,9 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                 name: name,
                 type: subtype as any,
                 description: description,
+                // Reuse timing/range fields for roll/effect to save state variables
+                roll: (subtype === 'Weapon' || subtype === 'Focus') ? timing : undefined,
+                effect: (subtype === 'Weapon' || subtype === 'Focus') ? range : undefined,
             };
             if (modifiersJson) {
                 try {
@@ -70,6 +85,17 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                     console.error('Invalid JSON for modifiers', e);
                 }
             }
+        } else if (type === 'REGISTER_STAT_LABEL') {
+            log.statKey = statKey;
+            log.stringValue = name; // Use name field for label
+            log.isMainStat = isMainStat;
+        } else if (type === 'REGISTER_RESOURCE') {
+            log.resource = {
+                id: crypto.randomUUID(),
+                name: name,
+                max: Number(value),
+                initial: Number(cost) // Reuse cost field
+            };
         }
 
         onAddLog(log);
@@ -93,6 +119,12 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
         setName('');
         setDescription('');
         setModifiersJson('');
+        setIsMainStat(false);
+        setTiming('');
+        setRange('');
+        setTarget('');
+        setCost('');
+        setCustomSubtype('');
     };
 
     return (
@@ -115,13 +147,15 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                                     <SelectItem value="SPEND_EXP">経験点消費 (Spend EXP)</SelectItem>
                                     <SelectItem value="LEARN_SKILL">スキル習得 (Learn Skill)</SelectItem>
                                     <SelectItem value="EQUIP">装備 (Equip)</SelectItem>
+                                    <SelectItem value="REGISTER_STAT_LABEL">ラベル登録 (Register Label)</SelectItem>
+                                    <SelectItem value="REGISTER_RESOURCE">リソース定義 (Define Resource)</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
-                        {type === 'GROWTH' && (
+                        {(type === 'GROWTH' || type === 'REGISTER_STAT_LABEL') && (
                             <div className="space-y-2">
-                                <Label>Stat</Label>
+                                <Label>Stat Key</Label>
                                 <div className="flex gap-2">
                                     <Select value={statKey} onValueChange={setStatKey}>
                                         <SelectTrigger className="w-[180px]">
@@ -138,7 +172,7 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                                     </Select>
                                     {statKey === 'Custom' && (
                                         <Input
-                                            placeholder="Key (e.g. Crafting)"
+                                            placeholder="Key (e.g. Cooking)"
                                             onChange={(e) => setStatKey(e.target.value)}
                                             className="flex-1"
                                         />
@@ -161,6 +195,7 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                                                 <SelectItem value="Passive">Passive</SelectItem>
                                                 <SelectItem value="Spell">Spell</SelectItem>
                                                 <SelectItem value="Other">Other</SelectItem>
+                                                <SelectItem value="Custom">Custom...</SelectItem>
                                             </>
                                         ) : (
                                             <>
@@ -173,6 +208,14 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                                         )}
                                     </SelectContent>
                                 </Select>
+                                {type === 'LEARN_SKILL' && subtype === 'Custom' && (
+                                    <Input
+                                        placeholder="Type (e.g. Ultimate)"
+                                        value={customSubtype}
+                                        onChange={(e) => setCustomSubtype(e.target.value)}
+                                        className="mt-2"
+                                    />
+                                )}
                             </div>
                         )}
                     </div>
@@ -204,6 +247,66 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                         </div>
                     )}
 
+                    {type === 'REGISTER_RESOURCE' && (
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label>Resource Name</Label>
+                                <Input
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    placeholder="Name (e.g. Reactor Gauge)"
+                                    required
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Max Value</Label>
+                                    <Input
+                                        type="number"
+                                        value={value}
+                                        onChange={(e) => setValue(e.target.value)}
+                                        placeholder="Max (e.g. 5)"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Initial Value</Label>
+                                    <Input
+                                        type="number"
+                                        value={cost} // Reuse cost field for initial value
+                                        onChange={(e) => setCost(e.target.value)}
+                                        placeholder="Initial (e.g. 0)"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {type === 'REGISTER_STAT_LABEL' && (
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label>Label Name</Label>
+                                <Input
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    placeholder="Label (e.g. 料理)"
+                                    required
+                                />
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <input
+                                    type="checkbox"
+                                    id="isMainStat"
+                                    checked={isMainStat}
+                                    onChange={(e) => setIsMainStat(e.target.checked)}
+                                    className="h-4 w-4 rounded border-gray-300"
+                                />
+                                <Label htmlFor="isMainStat">Show in Main Stats</Label>
+                            </div>
+                        </div>
+                    )}
+
                     {(type === 'LEARN_SKILL' || type === 'EQUIP') && (
                         <div className="space-y-4">
                             <div className="space-y-2">
@@ -223,6 +326,41 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                                     placeholder="Details..."
                                 />
                             </div>
+
+                            {type === 'LEARN_SKILL' && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Timing</Label>
+                                        <Input value={timing} onChange={(e) => setTiming(e.target.value)} placeholder="e.g. Action" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Range</Label>
+                                        <Input value={range} onChange={(e) => setRange(e.target.value)} placeholder="e.g. Close" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Target</Label>
+                                        <Input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="e.g. Single" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Cost</Label>
+                                        <Input value={cost} onChange={(e) => setCost(e.target.value)} placeholder="e.g. 3 MP" />
+                                    </div>
+                                </div>
+                            )}
+
+                            {type === 'EQUIP' && (subtype === 'Weapon' || subtype === 'Focus') && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Roll Formula</Label>
+                                        <Input value={timing} onChange={(e) => setTiming(e.target.value)} placeholder="e.g. 2d6+Combat" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Effect/Damage</Label>
+                                        <Input value={range} onChange={(e) => setRange(e.target.value)} placeholder="e.g. k20+Combat" />
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="space-y-2">
                                 <Label>Stat Modifiers (JSON)</Label>
                                 <Input

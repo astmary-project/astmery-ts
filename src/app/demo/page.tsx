@@ -20,6 +20,10 @@ export default function DemoPage() {
         // Element Bonus
         { id: '8', type: 'GROWTH', timestamp: 1, statKey: 'Insight', value: 3, description: 'Element Bonus (Light)' },
 
+        // Custom Label Registration
+        { id: '9', type: 'REGISTER_STAT_LABEL', timestamp: 1, statKey: 'Cooking', stringValue: '料理', description: 'Register custom label' },
+        { id: '9a', type: 'GROWTH', timestamp: 1, statKey: 'Cooking', value: 5, description: 'Learned Cooking' },
+
         // Skills - Active
         {
             id: '10',
@@ -160,18 +164,7 @@ export default function DemoPage() {
     };
 
     const state = useMemo(() => {
-        const s = CharacterCalculator.calculateState(logs);
-        // Apply formulas manually for demo
-        // In real app, this would be done by Calculator.calculateDerivedStats
-        // Note: We add (s.stats['Key'] || 0) to account for any direct bonuses/growth to these stats
-        s.derivedStats = {
-            'HP': (s.stats['Grade'] + s.stats['Body']) * 5 + (s.stats['HP'] || 0),
-            'MP': (s.stats['Grade'] + s.stats['Spirit']) * 5 + (s.stats['MP'] || 0),
-            'ActionSpeed': s.stats['Grade'] + 3 + (s.stats['ActionSpeed'] || 0),
-            'Defense': s.stats['Body'] + (s.stats['Defense'] || 0),
-            'MagicDefense': s.stats['Spirit'] + (s.stats['MagicDefense'] || 0),
-        };
-        return s;
+        return CharacterCalculator.calculateState(logs);
     }, [logs]);
 
     return (

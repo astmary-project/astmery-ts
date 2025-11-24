@@ -113,6 +113,48 @@ describe('CharacterCalculator', () => {
         expect(state.equipment).toHaveLength(0); // Sword was equipped then unequipped
     });
 
+    it('should calculate derived stats with defaults and overrides', () => {
+        const logs: CharacterLogEntry[] = [
+            { id: '1', type: 'GROWTH', timestamp: 1, statKey: 'Grade', value: 10 },
+            { id: '2', type: 'GROWTH', timestamp: 1, statKey: 'Body', value: 5 },
+            // Default HP = (Grade + Body) * 5 = (10 + 5) * 5 = 75
+
+            // Item with override
+            {
+                id: '3',
+                type: 'EQUIP',
+                timestamp: 2,
+                item: {
+                    id: 'shield',
+                    name: 'Shield',
+                    type: 'Armor',
+                    description: '',
+                    formulaOverrides: { 'Defense': 'Body * 3' } // Override default Body * 2
+                }
+            },
+            // Skill with additive bonus
+            {
+                id: '4',
+                type: 'LEARN_SKILL',
+                timestamp: 3,
+                skill: {
+                    id: 'toughness',
+                    name: 'Toughness',
+                    type: 'Passive',
+                    description: '',
+                    statModifiers: { 'HP': 10 } // Add 10 to HP
+                }
+            }
+        ];
+        const state = CharacterCalculator.calculateState(logs);
+
+        // HP: Formula (75) + Bonus (10) = 85
+        expect(state.derivedStats['HP']).toBe(85);
+
+        // Defense: Overridden Formula (Body * 3) = 5 * 3 = 15 (Default would be 10)
+        expect(state.derivedStats['Defense']).toBe(15);
+    });
+
     it('should manage skills', () => {
         const logs: CharacterLogEntry[] = [
             {
