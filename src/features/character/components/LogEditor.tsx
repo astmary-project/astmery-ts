@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import React, { useState } from 'react';
 import { CharacterLogEntry, CharacterLogType } from '../domain/CharacterLog';
+import { STANDARD_STAT_ORDER, STAT_LABELS } from '../domain/constants';
 
 interface LogEditorProps {
     onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
@@ -127,18 +128,11 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="Grade">グレード</SelectItem>
-                                            <SelectItem value="Science">科学技術力</SelectItem>
-                                            <SelectItem value="MagicKnowledge">魔術熟知</SelectItem>
-                                            <SelectItem value="Combat">戦闘能力</SelectItem>
-                                            <SelectItem value="Magic">魔力</SelectItem>
-                                            <SelectItem value="Spirit">精神</SelectItem>
-                                            <SelectItem value="Body">肉体</SelectItem>
-                                            <SelectItem value="HP">最大HP</SelectItem>
-                                            <SelectItem value="MP">最大MP</SelectItem>
-                                            <SelectItem value="Defense">防護</SelectItem>
-                                            <SelectItem value="MagicDefense">魔術防御</SelectItem>
-                                            <SelectItem value="ActionSpeed">行動速度</SelectItem>
+                                            {STANDARD_STAT_ORDER.map(key => (
+                                                <SelectItem key={key} value={key}>
+                                                    {STAT_LABELS[key] || key}
+                                                </SelectItem>
+                                            ))}
                                             <SelectItem value="Custom">カスタム...</SelectItem>
                                         </SelectContent>
                                     </Select>

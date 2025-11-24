@@ -19,10 +19,6 @@ export default function DemoPage() {
 
         // Element Bonus
         { id: '8', type: 'GROWTH', timestamp: 1, statKey: 'Insight', value: 3, description: 'Element Bonus (Light)' },
-        { id: '8a', type: 'GROWTH', timestamp: 1, statKey: 'RecoveryAmount', value: 3, description: 'Element Bonus (Light)' },
-        { id: '8b', type: 'GROWTH', timestamp: 1, statKey: 'KnowledgeCheck', value: 3, description: 'Element Bonus (Light)' },
-        { id: '8c', type: 'GROWTH', timestamp: 1, statKey: 'MagicDefense', value: 3, description: 'Element Bonus (Light)' },
-        { id: '8d', type: 'GROWTH', timestamp: 1, statKey: 'GatheringCount', value: 3, description: 'Element Bonus (Light)' },
 
         // Skills - Active
         {
@@ -96,7 +92,7 @@ export default function DemoPage() {
             }
         },
 
-        // Skills - Magic
+        // Skills - Spell
         {
             id: '16',
             type: 'LEARN_SKILL',
@@ -120,7 +116,6 @@ export default function DemoPage() {
             }
         },
 
-        // Equipment
         // Equipment
         {
             id: '20',

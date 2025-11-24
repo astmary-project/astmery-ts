@@ -1,10 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import React from 'react';
-import { CharacterState } from '../domain/CharacterLog';
 import { CharacterHeader } from './CharacterHeader';
 
-import { CharacterLogEntry } from '../domain/CharacterLog';
+import { CharacterLogEntry, CharacterState } from '../domain/CharacterLog';
+import { STANDARD_STAT_ORDER, STAT_LABELS } from '../domain/constants';
 import { LogEditor } from './LogEditor';
 
 interface CharacterSheetProps {
@@ -23,23 +23,9 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({ character, state
     // Helper to render stats grid
     const renderStats = () => {
         // Mapping for Japanese labels
-        const labelMap: Record<string, string> = {
-            'Grade': 'グレード',
-            'ActionSpeed': '行動速度',
-            'Science': '科学技術力',
-            'MagicKnowledge': '魔術熟知',
-            'Combat': '戦闘能力',
-            'Magic': '魔力',
-            'Spirit': '精神',
-            'Body': '肉体',
-            'HP': '最大HP',
-            'MP': '最大MP',
-            'Defense': '防護',
-            'MagicDefense': '魔術防御',
-            'Insight': '看破',
-        };
-
-        const standardOrder = ['Grade', 'ActionSpeed', 'Science', 'MagicKnowledge', 'Combat', 'Magic', 'Spirit', 'Body', 'HP', 'MP', 'Defense', 'MagicDefense'];
+        // Use shared constants
+        const labelMap = STAT_LABELS;
+        const standardOrder = STANDARD_STAT_ORDER;
 
         // Separate stats into Standard and Bonuses
         const allKeys = Array.from(new Set([...Object.keys(state.stats), ...Object.keys(state.derivedStats)]));
