@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Trash2 } from 'lucide-react';
 
 import { Dices } from 'lucide-react';
 import { CharacterLogEntry, CharacterState } from '../domain/CharacterLog';
@@ -125,6 +126,20 @@ export const CharacterSheet = ({ character, state, logs, onAddLog }: CharacterSh
                 <div className="grid gap-3">
                     {skills.map(skill => (
                         <div key={skill.id} className="p-3 border rounded-lg bg-card hover:bg-accent/5 transition-colors group relative">
+                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                    onClick={() => onAddLog({
+                                        type: 'FORGET_SKILL',
+                                        skill: { id: skill.id } as any, // IDだけで十分なので型アサーションで逃げるか、Partial<Skill>を許容するか
+                                        description: `Forgot ${skill.name}`
+                                    })}
+                                >
+                                    <Trash2 size={16} />
+                                </Button>
+                            </div>
                             <div className="flex justify-between items-start mb-1">
                                 <div className="font-medium flex items-center gap-2">
                                     {skill.name}
@@ -292,6 +307,20 @@ export const CharacterSheet = ({ character, state, logs, onAddLog }: CharacterSh
                                                 </div>
                                                 <div className="text-sm text-muted-foreground max-w-md">
                                                     {item.description}
+                                                </div>
+                                                <div className="absolute top-1/2 -translate-y-1/2 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                        onClick={() => onAddLog({
+                                                            type: 'UNEQUIP',
+                                                            item: { id: item.id } as any,
+                                                            description: `Unequipped ${item.name}`
+                                                        })}
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </Button>
                                                 </div>
                                             </div>
                                         ))}

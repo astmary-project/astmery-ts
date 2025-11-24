@@ -1,3 +1,4 @@
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -5,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import React, { useState } from 'react';
 import { CharacterLogEntry, CharacterLogType } from '../domain/CharacterLog';
-import { STANDARD_STAT_ORDER, STAT_LABELS } from '../domain/constants';
+import { JAPANESE_TO_ENGLISH_STATS, STANDARD_STAT_ORDER, STAT_LABELS } from '../domain/constants';
 
 interface LogEditorProps {
     onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
@@ -64,14 +65,26 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
             };
             if (modifiersJson) {
                 try {
-                    log.skill!.statModifiers = JSON.parse(modifiersJson);
+                    const parsed = JSON.parse(modifiersJson);
+                    const normalized: Record<string, number> = {};
+                    for (const [key, value] of Object.entries(parsed)) {
+                        const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                        normalized[normalizedKey] = Number(value);
+                    }
+                    log.skill!.statModifiers = normalized;
                 } catch (e) {
                     console.error('Invalid JSON for modifiers', e);
                 }
             }
             if (dynamicModifiersJson) {
                 try {
-                    log.skill!.dynamicModifiers = JSON.parse(dynamicModifiersJson);
+                    const parsed = JSON.parse(dynamicModifiersJson);
+                    const normalized: Record<string, string> = {};
+                    for (const [key, value] of Object.entries(parsed)) {
+                        const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                        normalized[normalizedKey] = String(value);
+                    }
+                    log.skill!.dynamicModifiers = normalized;
                 } catch (e) {
                     console.error('Invalid JSON for dynamic modifiers', e);
                 }
@@ -88,14 +101,27 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
             };
             if (modifiersJson) {
                 try {
-                    log.item!.statModifiers = JSON.parse(modifiersJson);
+                    const parsed = JSON.parse(modifiersJson);
+                    const normalized: Record<string, number> = {};
+                    for (const [key, value] of Object.entries(parsed)) {
+                        const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                        normalized[normalizedKey] = Number(value);
+                    }
+                    log.item!.statModifiers = normalized;
                 } catch (e) {
                     console.error('Invalid JSON for modifiers', e);
                 }
             }
             if (dynamicModifiersJson) {
                 try {
-                    log.item!.dynamicModifiers = JSON.parse(dynamicModifiersJson);
+                    const parsed = JSON.parse(dynamicModifiersJson);
+                    // Normalize keys here too for consistency in storage
+                    const normalizedModifiers: Record<string, string> = {};
+                    for (const [key, value] of Object.entries(parsed)) {
+                        const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                        normalizedModifiers[normalizedKey] = String(value);
+                    }
+                    log.item!.dynamicModifiers = normalizedModifiers;
                 } catch (e) {
                     console.error('Invalid JSON for dynamic modifiers', e);
                 }

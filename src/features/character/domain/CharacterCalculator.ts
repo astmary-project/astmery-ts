@@ -1,5 +1,6 @@
 import { all, create } from 'mathjs';
 import { CharacterLogEntry, CharacterState } from './CharacterLog';
+import { JAPANESE_TO_ENGLISH_STATS } from './constants';
 
 // Configure mathjs
 const math = create(all, {
@@ -64,16 +65,22 @@ export class CharacterCalculator {
         for (const item of state.equipment) {
             if (item.statModifiers) {
                 for (const [key, value] of Object.entries(item.statModifiers)) {
-                    state.stats[key] = (state.stats[key] || 0) + value;
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                    state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + value;
                 }
             }
             if (item.formulaOverrides) {
-                Object.assign(formulas, item.formulaOverrides);
+                // Formula overrides keys should also be normalized if they target standard stats
+                for (const [key, formula] of Object.entries(item.formulaOverrides)) {
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                    formulas[normalizedKey] = formula;
+                }
             }
             if (item.dynamicModifiers) {
                 for (const [key, formula] of Object.entries(item.dynamicModifiers)) {
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
                     const bonus = this.evaluateFormula(formula, state);
-                    state.stats[key] = (state.stats[key] || 0) + bonus;
+                    state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + bonus;
                 }
             }
         }
@@ -82,16 +89,21 @@ export class CharacterCalculator {
         for (const skill of state.skills) {
             if (skill.statModifiers) {
                 for (const [key, value] of Object.entries(skill.statModifiers)) {
-                    state.stats[key] = (state.stats[key] || 0) + value;
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                    state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + value;
                 }
             }
             if (skill.formulaOverrides) {
-                Object.assign(formulas, skill.formulaOverrides);
+                for (const [key, formula] of Object.entries(skill.formulaOverrides)) {
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                    formulas[normalizedKey] = formula;
+                }
             }
             if (skill.dynamicModifiers) {
                 for (const [key, formula] of Object.entries(skill.dynamicModifiers)) {
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
                     const bonus = this.evaluateFormula(formula, state);
-                    state.stats[key] = (state.stats[key] || 0) + bonus;
+                    state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + bonus;
                 }
             }
         }
@@ -177,18 +189,57 @@ export class CharacterCalculator {
     }
 
     /**
+     * Normalizes a formula string by:
+     * 1. Replacing known Japanese stat names with English IDs.
+     * 2. Wrapping unknown non-ASCII sequences (custom Japanese vars) in data["..."] syntax.
+     */
+    public static normalizeFormula(formula: string): string {
+        let normalized = formula;
+
+        // 1. Replace known Japanese labels
+        // Sort by length descending to avoid partial matches (though unlikely with these specific names)
+        const jpKeys = Object.keys(JAPANESE_TO_ENGLISH_STATS).sort((a, b) => b.length - a.length);
+        for (const jp of jpKeys) {
+            const en = JAPANESE_TO_ENGLISH_STATS[jp];
+            // Use regex to replace only whole words if possible, but Japanese doesn't have spaces usually.
+            // Simple global replace is likely safe enough for these specific labels.
+            normalized = normalized.split(jp).join(en);
+        }
+
+        // 2. Wrap remaining non-ASCII sequences in data["..."]
+        // Matches sequences of non-ASCII characters that are NOT inside quotes
+        // This is a simplified approach. A full parser would be better but overkill here.
+        // We assume variables don't start with numbers.
+        normalized = normalized.replace(/([^\x00-\x7F]+)/g, (match) => {
+            // If it's already quoted or part of a string, we might have issues,
+            // but for simple math formulas this should be fine.
+            return `data["${match}"]`;
+        });
+
+        return normalized;
+    }
+
+    /**
      * Evaluates a formula string against the character state.
      */
     public static evaluateFormula(formula: string, state: CharacterState): number {
         try {
+            const normalizedFormula = this.normalizeFormula(formula);
+
             // Create a scope with all stats
             // We default missing stats to 0 to avoid errors in formulas
-            const scope: Record<string, number> = new Proxy({ ...state.stats }, {
+            const scopeProxy = new Proxy({ ...state.stats }, {
                 get: (target, prop: string) => (prop in target ? target[prop] : 0)
             });
 
+            // We also provide 'data' for the accessor syntax used for custom Japanese vars
+            const scope = {
+                ...scopeProxy,
+                data: scopeProxy
+            };
+
             // Evaluate
-            const result = math.evaluate(formula, scope);
+            const result = math.evaluate(normalizedFormula, scope);
             return typeof result === 'number' ? result : 0;
         } catch (error) {
             console.error(`Formula evaluation error: ${formula}`, error);
@@ -208,3 +259,4 @@ export class CharacterCalculator {
         }
     }
 }
+

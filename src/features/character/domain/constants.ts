@@ -31,3 +31,8 @@ export const STANDARD_STAT_ORDER = [
     'Defense',
     'MagicDefense'
 ];
+
+export const JAPANESE_TO_ENGLISH_STATS: Record<string, string> = Object.entries(STAT_LABELS).reduce((acc, [key, value]) => {
+    acc[value] = key;
+    return acc;
+}, {} as Record<string, string>);

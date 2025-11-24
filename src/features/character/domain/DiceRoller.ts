@@ -1,4 +1,5 @@
 import * as math from 'mathjs';
+import { CharacterCalculator } from './CharacterCalculator';
 import { CharacterState } from './CharacterLog';
 
 export interface RollResult {
@@ -15,25 +16,52 @@ export class DiceRoller {
      * Replaces XdY with random values and evaluates the expression.
      */
     public static roll(formula: string, state: CharacterState): RollResult {
-        let details = formula;
+        // Normalize the formula (handle Japanese stat names etc.)
+        const normalizedFormula = CharacterCalculator.normalizeFormula(formula);
+
+        // 1. Replace stats with values
+        // We use a regex to find potential stat names (alphanumeric + underscores)
+        // But since we have normalized it, we might have data["..."] for custom vars.
+        // The previous simple regex replacement won't work well with data["..."].
+        // Instead, let's use mathjs to evaluate the non-dice parts?
+        // OR, we can just use the evaluateFormula logic which handles the scope proxy.
+        // BUT, we need to preserve the "XdY" parts for the dice rolling logic.
+
+        // Strategy:
+        // 1. Identify XdY parts and replace them with a placeholder or keep them.
+        // 2. Evaluate the REST of the formula using CharacterCalculator.evaluateFormula?
+        //    No, that would evaluate the whole thing.
+        // 3. Better: Replace all known stats in the string with their values.
+        //    For data["..."], we can replace that pattern with the value.
+
+        let processedFormula = normalizedFormula;
+
+        // Replace data["KEY"] with value
+        processedFormula = processedFormula.replace(new RegExp('data\\["([^"]+)"\\]', 'g'), (_, key) => {
+            return (state.stats[key] || 0).toString();
+        });
+
+        // Replace standard English stat names
+        // We iterate over state.stats and derivedStats
+        const allStats = { ...state.stats, ...state.derivedStats };
+        // Sort keys by length to avoid partial replacement
+        const sortedKeys = Object.keys(allStats).sort((a, b) => b.length - a.length);
+
+        for (const key of sortedKeys) {
+            // Simple replacement - might be risky if keys are substrings of others or commands
+            // But for now it's acceptable given the controlled domain.
+            // We use a regex with word boundaries for English keys.
+            const regex = new RegExp('\\b' + key + '\\b', 'g');
+            processedFormula = processedFormula.replace(regex, (allStats[key] || 0).toString());
+        }
+
+        let details = processedFormula; // Start details with the stat-replaced formula
         let isCritical = false;
         let isFumble = false;
 
-        // Replace stats in formula with their values
-        // We use a regex to find words that match stat keys
-        // This is a simple replacement, might need more robust parsing later
-        const statsScope = { ...state.stats, ...state.derivedStats };
-        for (const [key, value] of Object.entries(statsScope)) {
-            // Replace whole words only
-            const regex = new RegExp(`\\b${key}\\b`, 'g');
-            if (regex.test(details)) {
-                details = details.replace(regex, `${value}`);
-            }
-        }
-
         // Parse dice notation (XdY)
         // Regex to match 2d6, 1d100, etc.
-        const diceRegex = /(\d+)d(\d+)/g;
+        const diceRegex = new RegExp('(\\d+)d(\\d+)', 'g');
 
         details = details.replace(diceRegex, (match, countStr, sidesStr) => {
             const count = parseInt(countStr, 10);
@@ -52,97 +80,17 @@ export class DiceRoller {
                 if (rolls.every(r => r === 1)) isFumble = true;
             }
 
-            return `[${rolls.join(', ')}]`;
+            return '[' + rolls.join(', ') + ']';
         });
 
         // Evaluate the final expression
-        // The expression now looks like "[3, 4] + 5" which mathjs might not handle directly if we want sum
-        // So we need to sum the arrays in the string before passing to mathjs?
-        // Actually, let's replace [x, y] with (x+y) for evaluation, but keep [x, y] for details?
-        // Better approach: Calculate the sum of dice and replace in a separate string for evaluation.
+        // We replace [x, y] with (x + y) in the details string to get the evaluation string.
 
-        let evalString = formula;
-
-        // 1. Replace stats in evalString
-        for (const [key, value] of Object.entries(statsScope)) {
-            const regex = new RegExp(`\\b${key}\\b`, 'g');
-            evalString = evalString.replace(regex, `${value}`);
-        }
-
-        // 2. Replace dice in evalString with their sums
-        // We need to ensure we use the SAME rolls as generated above. 
-        // This means we should probably do the dice rolling first and store results.
-
-        // Refined Approach:
-        // 1. Identify all dice expressions
-        // 2. Roll them
-        // 3. Construct "Details" string with [x, y]
-        // 4. Construct "Eval" string with (sum)
-
-        let currentDetails = formula;
-        let currentEval = formula;
-
-        // Replace stats first
-        for (const [key, value] of Object.entries(statsScope)) {
-            const regex = new RegExp(`\\b${key}\\b`, 'g');
-            currentDetails = currentDetails.replace(regex, `${value}`);
-            currentEval = currentEval.replace(regex, `${value}`);
-        }
-
-        // Find and replace dice
-        // We use a loop to handle multiple occurrences
-        let match;
-        // Reset regex state
-        const diceRegexGlobal = /(\d+)d(\d+)/g;
-
-        // We need to replace carefully. String.replace with callback is best but we need to update two strings.
-        // Since we need to sync them, let's build a map of replacements?
-        // Or just process sequentially.
-
-        // Let's use a replacer function that updates both, but we need to be careful about string indexes changing.
-        // Simpler: Split the string? No.
-
-        // Let's just re-run the regex replacement logic but capture the results to update both strings.
-        // Actually, the previous `details.replace` was doing it in one pass.
-        // Let's do it manually.
-
-        const chunks: { text: string, isDice: boolean, rolls?: number[], sum?: number }[] = [];
-        let lastIndex = 0;
-
-        // We work on the "stat-replaced" formula
-        const baseFormula = currentEval;
-
-        while ((match = diceRegexGlobal.exec(baseFormula)) !== null) {
-            // Text before match
-            chunks.push({ text: baseFormula.slice(lastIndex, match.index), isDice: false });
-
-            const count = parseInt(match[1], 10);
-            const sides = parseInt(match[2], 10);
-            const rolls: number[] = [];
-            let sum = 0;
-
-            for (let i = 0; i < count; i++) {
-                const roll = Math.floor(Math.random() * sides) + 1;
-                rolls.push(roll);
-                sum += roll;
-            }
-
-            // Check crit/fumble
-            if (count > 0) {
-                // Example rule: 2d6 -> 12 is crit, 2 is fumble
-                // For now, let's just flag it if it's max possible or min possible
-                if (sum === count * sides) isCritical = true;
-                if (sum === count) isFumble = true;
-            }
-
-            chunks.push({ text: match[0], isDice: true, rolls, sum });
-            lastIndex = diceRegexGlobal.lastIndex;
-        }
-        chunks.push({ text: baseFormula.slice(lastIndex), isDice: false });
-
-        // Reconstruct strings
-        details = chunks.map(c => c.isDice ? `[${c.rolls!.join(', ')}]` : c.text).join('');
-        evalString = chunks.map(c => c.isDice ? `(${c.sum})` : c.text).join('');
+        const evalString = details.replace(new RegExp('\\[([\\d, ]+)\\]', 'g'), (match, content) => {
+            const rolls = content.split(',').map((s: string) => parseInt(s.trim(), 10));
+            const sum = rolls.reduce((a: number, b: number) => a + b, 0);
+            return '(' + sum + ')';
+        });
 
         let total = 0;
         try {
