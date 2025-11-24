@@ -18,6 +18,7 @@ export class CharacterCalculator {
         customLabels: {},
         customMainStats: [],
         resources: [],
+        recentRolls: [],
     };
 
     /**
@@ -46,6 +47,7 @@ export class CharacterCalculator {
             customLabels: {},
             customMainStats: [],
             resources: [],
+            recentRolls: [],
         };
 
         // Sort logs by timestamp just in case
@@ -158,6 +160,17 @@ export class CharacterCalculator {
             case 'REGISTER_RESOURCE':
                 if (log.resource) {
                     state.resources.push(log.resource);
+                }
+                break;
+            case 'ROLL':
+                // We just store the log in recentRolls for display
+                // We assume the log already has the result embedded (calculated at creation time)
+                // Or we could recalculate it here? No, logs should be immutable history.
+                // The log creation (in UI) should use DiceRoller to get the result and save it in the log.
+                state.recentRolls.unshift(log);
+                // Keep only last 20 rolls
+                if (state.recentRolls.length > 20) {
+                    state.recentRolls.pop();
                 }
                 break;
         }

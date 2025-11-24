@@ -10,7 +10,8 @@ export type CharacterLogType =
     | 'GAIN_EXP'
     | 'SPEND_EXP'
     | 'REGISTER_STAT_LABEL'
-    | 'REGISTER_RESOURCE'; // New: Define a resource/gauge
+    | 'REGISTER_RESOURCE'
+    | 'ROLL'; // New: Dice roll
 
 export interface CharacterLogEntry {
     id: string;
@@ -24,9 +25,18 @@ export interface CharacterLogEntry {
     tagId?: string;
     item?: Item;
     skill?: Skill;
-    resource?: Resource; // New: Resource definition
+    resource?: Resource;
+    diceRoll?: DiceRoll; // New: Dice roll details
     // Metadata
     description?: string;
+}
+
+export interface DiceRoll {
+    formula: string; // e.g. "2d6 + 5"
+    result: number; // e.g. 12
+    details: string; // e.g. "[3, 4] + 5"
+    isCritical?: boolean;
+    isFumble?: boolean;
 }
 
 export interface Resource {
@@ -84,4 +94,5 @@ export interface CharacterState {
     customLabels: Record<string, string>; // From REGISTER_STAT_LABEL logs
     customMainStats: string[]; // Stats promoted to main display order
     resources: Resource[]; // Defined resources
+    recentRolls: CharacterLogEntry[]; // Recent roll logs for display
 }
