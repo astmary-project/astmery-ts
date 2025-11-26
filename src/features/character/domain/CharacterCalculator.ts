@@ -30,7 +30,7 @@ export class CharacterCalculator {
         'MP': '(Grade + Spirit) * 5',
         'Defense': 'Body * 2',
         'MagicDefense': 'Spirit * 2',
-        'ActionSpeed': 'Grade + Science + 10',
+        'ActionSpeed': 'Grade + 3',
     };
 
     /**

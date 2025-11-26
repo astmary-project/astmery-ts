@@ -12,8 +12,8 @@ import { DicePanel } from './DicePanel';
 import { LogEditor } from './LogEditor';
 
 interface CharacterSheetProps {
-    character: {
-        name: string;
+    name: string;
+    character?: {
         avatarUrl?: string;
         bio?: string;
         specialtyElements?: string[];
@@ -22,7 +22,7 @@ interface CharacterSheetProps {
     logs: CharacterLogEntry[];
     onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
 }
-export const CharacterSheet = ({ character, state, logs, onAddLog }: CharacterSheetProps) => {
+export const CharacterSheet = ({ name, character, state, logs, onAddLog }: CharacterSheetProps) => {
     // Helper for quick rolls
     const performRoll = (formula: string, description?: string) => {
         const result = DiceRoller.roll(formula, state);
@@ -196,7 +196,7 @@ export const CharacterSheet = ({ character, state, logs, onAddLog }: CharacterSh
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6">
-            <CharacterHeader name={character.name} avatarUrl={character.avatarUrl} bio={character.bio} specialtyElements={character.specialtyElements} exp={state.exp} />
+            <CharacterHeader name={name} avatarUrl={character?.avatarUrl || undefined} bio={character?.bio || undefined} specialtyElements={character?.specialtyElements || undefined} exp={state.exp} />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Left Column: Character Sheet (8 cols) */}
