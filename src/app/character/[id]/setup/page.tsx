@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { STANDARD_STAT_ORDER, STAT_LABELS } from '@/features/character/domain/constants';
+import { JAPANESE_TO_ENGLISH_STATS, STANDARD_STAT_ORDER, STAT_LABELS } from '@/features/character/domain/constants';
 import { useCharacterSheet } from '@/features/character/hooks/useCharacterSheet';
 import { Plus, Trash2 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
@@ -20,7 +20,7 @@ export default function CharacterSetupPage() {
     const params = useParams();
     const router = useRouter();
     const characterId = params.id as string;
-    const { name, character, state, isLoading, updateName, updateProfile, addLog } = useCharacterSheet(characterId);
+    const { name, character, state, logs, isLoading, updateName, updateProfile, addLog, updateCharacter } = useCharacterSheet(characterId);
 
     // Local form state
     const [formData, setFormData] = useState({
@@ -87,10 +87,65 @@ export default function CharacterSetupPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // 1. Update Profile
-        updateName(formData.name);
+        // Prepare new logs
+        const logsToAdd: any[] = [];
+        for (const key of STANDARD_STAT_ORDER) {
+            const currentVal = state.stats[key] || 0;
+            const targetVal = formData.stats[key] || 0;
+            const diff = targetVal - currentVal;
 
-        // Format specialty elements: "Name(Benefit)" or just "Name"
+            if (diff !== 0) {
+                logsToAdd.push({
+                    id: crypto.randomUUID(),
+                    timestamp: Date.now(),
+                    type: 'GROWTH',
+                    statKey: key,
+                    value: diff,
+                    description: 'セットアップウィザードによる調整',
+                });
+            }
+        }
+
+        // 2. Parse Benefits and add logs
+        // We only do this for *new* benefits or we assume the user manages duplicates?
+        // For a Setup Wizard, we assume we are applying these effects now.
+        // To avoid duplicates on re-runs, strictly speaking we should check if this specific effect exists,
+        // but for MVP we'll just append. The user can delete logs if needed.
+        for (const el of specialtyElements) {
+            if (!el.benefit) continue;
+
+            // Simple regex for "Stat+N" or "Stat-N"
+            // Matches: "筋力+1", "Strength + 2", "攻撃力-1"
+            const match = el.benefit.match(/^(.+?)\s*([+\-])\s*(\d+)$/);
+            if (match) {
+                const rawStat = match[1].trim();
+                const op = match[2];
+                const val = parseInt(match[3]);
+
+                // Normalize stat name
+                const statKey = JAPANESE_TO_ENGLISH_STATS[rawStat] || rawStat;
+
+                // Determine value
+                const change = op === '-' ? -val : val;
+
+                if (statKey) {
+                    logsToAdd.push({
+                        id: crypto.randomUUID(),
+                        timestamp: Date.now(),
+                        type: 'GROWTH',
+                        statKey: statKey,
+                        value: change,
+                        description: `得意属性: ${el.name} の恩恵`,
+                    });
+                }
+            }
+        }
+
+        // 3. Update Stats (Generate Growth Logs for differences) hook.
+        const finalLogs = [...logs, ...logsToAdd];
+
+
+        // Format specialty elements
         const formattedElements = specialtyElements
             .filter(el => el.name.trim() !== '')
             .map(el => {
@@ -100,26 +155,15 @@ export default function CharacterSetupPage() {
                 return el.name;
             });
 
-        updateProfile({
-            bio: formData.bio,
-            specialtyElements: formattedElements,
+        // Bulk Update
+        await updateCharacter({
+            name: formData.name,
+            profile: {
+                bio: formData.bio,
+                specialtyElements: formattedElements,
+            },
+            logs: finalLogs,
         });
-
-        // 2. Update Stats (Generate Growth Logs for differences)
-        for (const key of STANDARD_STAT_ORDER) {
-            const currentVal = state.stats[key] || 0;
-            const targetVal = formData.stats[key] || 0;
-            const diff = targetVal - currentVal;
-
-            if (diff !== 0) {
-                addLog({
-                    type: 'GROWTH',
-                    statKey: key,
-                    value: diff,
-                    description: 'セットアップウィザードによる調整',
-                });
-            }
-        }
 
         // Redirect to sheet
         router.push(`/character/${characterId}`);

@@ -55,7 +55,7 @@ export const useCharacterSheet = (characterId: string) => {
         load();
     }, [characterId]);
 
-    const addLog = (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => {
+    const addLog = async (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => {
         const newLog: CharacterLogEntry = {
             ...log,
             id: crypto.randomUUID(),
@@ -66,7 +66,7 @@ export const useCharacterSheet = (characterId: string) => {
         setLogs(newLogs);
 
         // Auto-save (Optimistic)
-        save(name, newLogs, characterProfile);
+        await save(name, newLogs, characterProfile);
     };
 
     const save = async (name: string, currentLogs: CharacterLogEntry[], profile: any) => {
@@ -83,15 +83,31 @@ export const useCharacterSheet = (characterId: string) => {
         }
     };
 
-    const updateProfile = (profile: Partial<typeof characterProfile>) => {
+    const updateProfile = async (profile: Partial<typeof characterProfile>) => {
         const newProfile = { ...characterProfile, ...profile };
         setCharacterProfile(newProfile);
-        save(name, logs, newProfile);
+        await save(name, logs, newProfile);
     };
 
-    const updateName = (name: string) => {
+    const updateName = async (name: string) => {
         setName(name);
-        save(name, logs, characterProfile);
+        await save(name, logs, characterProfile);
+    };
+
+    const updateCharacter = async (updates: {
+        name?: string;
+        profile?: Partial<typeof characterProfile>;
+        logs?: CharacterLogEntry[];
+    }) => {
+        const newName = updates.name ?? name;
+        const newProfile = updates.profile ? { ...characterProfile, ...updates.profile } : characterProfile;
+        const newLogs = updates.logs ?? logs;
+
+        if (updates.name !== undefined) setName(newName);
+        if (updates.profile) setCharacterProfile(newProfile);
+        if (updates.logs) setLogs(newLogs);
+
+        await save(newName, newLogs, newProfile);
     };
 
     return {
@@ -104,6 +120,7 @@ export const useCharacterSheet = (characterId: string) => {
         updateName,
         addLog,
         updateProfile,
+        updateCharacter,
         reload: () => window.location.reload() // Temp
     };
 };
