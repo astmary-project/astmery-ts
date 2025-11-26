@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import React, { useState } from 'react';
 import { CharacterLogEntry, CharacterLogType } from '../domain/CharacterLog';
-import { JAPANESE_TO_ENGLISH_STATS, STANDARD_STAT_ORDER, STAT_LABELS } from '../domain/constants';
+import { CharacterLogFactory } from '../domain/CharacterLogFactory';
+import { STANDARD_STAT_ORDER, STAT_LABELS } from '../domain/constants';
 
 interface LogEditorProps {
     onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
@@ -37,119 +38,62 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Base log structure
-        const log: Omit<CharacterLogEntry, 'id' | 'timestamp'> = {
-            type,
-            description: comment,
-        };
+        let log: CharacterLogEntry | null = null;
 
         if (type === 'GROWTH') {
             const numValue = parseFloat(value);
             if (isNaN(numValue)) return;
-            log.statKey = statKey;
-            log.value = numValue;
-        } else if (type === 'GAIN_EXP' || type === 'SPEND_EXP') {
+            log = CharacterLogFactory.createGrowthLog(statKey, numValue, comment);
+        } else if (type === 'GAIN_EXP') {
             const numValue = parseFloat(value);
             if (isNaN(numValue)) return;
-            log.value = numValue;
+            log = CharacterLogFactory.createGainExpLog(numValue, comment || 'Gained EXP');
+        } else if (type === 'SPEND_EXP') {
+            const numValue = parseFloat(value);
+            if (isNaN(numValue)) return;
+            log = CharacterLogFactory.createSpendExpLog(numValue, comment || 'Spent EXP');
         } else if (type === 'LEARN_SKILL') {
-            log.skill = {
-                id: crypto.randomUUID(),
-                name: name,
-                type: (subtype === 'Custom' ? customSubtype : subtype) as any,
-                description: description,
-                timing: timing,
-                range: range,
-                target: target,
-                cost: cost,
-            };
-            if (modifiersJson) {
-                try {
-                    const parsed = JSON.parse(modifiersJson);
-                    const normalized: Record<string, number> = {};
-                    for (const [key, value] of Object.entries(parsed)) {
-                        const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-                        normalized[normalizedKey] = Number(value);
-                    }
-                    log.skill!.statModifiers = normalized;
-                } catch (e) {
-                    console.error('Invalid JSON for modifiers', e);
-                }
-            }
-            if (dynamicModifiersJson) {
-                try {
-                    const parsed = JSON.parse(dynamicModifiersJson);
-                    const normalized: Record<string, string> = {};
-                    for (const [key, value] of Object.entries(parsed)) {
-                        const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-                        normalized[normalizedKey] = String(value);
-                    }
-                    log.skill!.dynamicModifiers = normalized;
-                } catch (e) {
-                    console.error('Invalid JSON for dynamic modifiers', e);
-                }
-            }
+            log = CharacterLogFactory.createSkillLog({
+                name,
+                type: subtype === 'Custom' ? customSubtype : subtype,
+                description: description, // Skill description
+                timing,
+                range,
+                target,
+                cost,
+                modifiersJson,
+                dynamicModifiersJson
+            });
+            if (comment) log.description = `${log.description} - ${comment}`;
         } else if (type === 'EQUIP') {
-            log.item = {
-                id: crypto.randomUUID(),
-                name: name,
-                type: subtype as any,
-                description: description,
-                // Reuse timing/range fields for roll/effect to save state variables
-                roll: (subtype === 'Weapon' || subtype === 'Focus') ? timing : undefined,
-                effect: (subtype === 'Weapon' || subtype === 'Focus') ? range : undefined,
-            };
-            if (modifiersJson) {
-                try {
-                    const parsed = JSON.parse(modifiersJson);
-                    const normalized: Record<string, number> = {};
-                    for (const [key, value] of Object.entries(parsed)) {
-                        const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-                        normalized[normalizedKey] = Number(value);
-                    }
-                    log.item!.statModifiers = normalized;
-                } catch (e) {
-                    console.error('Invalid JSON for modifiers', e);
-                }
-            }
-            if (dynamicModifiersJson) {
-                try {
-                    const parsed = JSON.parse(dynamicModifiersJson);
-                    // Normalize keys here too for consistency in storage
-                    const normalizedModifiers: Record<string, string> = {};
-                    for (const [key, value] of Object.entries(parsed)) {
-                        const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-                        normalizedModifiers[normalizedKey] = String(value);
-                    }
-                    log.item!.dynamicModifiers = normalizedModifiers;
-                } catch (e) {
-                    console.error('Invalid JSON for dynamic modifiers', e);
-                }
-            }
+            log = CharacterLogFactory.createItemLog({
+                name,
+                subtype,
+                description: description, // Item description
+                timing,
+                range,
+                modifiersJson,
+                dynamicModifiersJson
+            });
+            if (comment) log.description = `${log.description} - ${comment}`;
         } else if (type === 'REGISTER_STAT_LABEL') {
-            log.statKey = statKey;
-            log.stringValue = name; // Use name field for label
-            log.isMainStat = isMainStat;
+            log = CharacterLogFactory.createRegisterStatLabelLog(statKey, name, isMainStat);
+            if (comment) log.description = `${log.description} - ${comment}`;
         } else if (type === 'REGISTER_RESOURCE') {
-            log.resource = {
-                id: crypto.randomUUID(),
-                name: name,
-                max: Number(value),
-                initial: Number(cost) // Reuse cost field
-            };
+            log = CharacterLogFactory.createRegisterResourceLog(name, Number(value), Number(cost));
+            if (comment) log.description = `${log.description} - ${comment}`;
         }
 
-        onAddLog(log);
+        if (log) {
+            onAddLog(log);
+        }
 
         // Handle EXP Cost for Growth
         if (type === 'GROWTH' && expCost) {
-            const cost = parseFloat(expCost);
-            if (!isNaN(cost) && cost > 0) {
-                onAddLog({
-                    type: 'SPEND_EXP',
-                    value: cost,
-                    description: `Cost for ${statKey} growth`,
-                });
+            const costVal = parseFloat(expCost);
+            if (!isNaN(costVal) && costVal > 0) {
+                const costLog = CharacterLogFactory.createSpendExpLog(costVal, `Cost for ${statKey} growth`);
+                onAddLog(costLog);
             }
         }
 
