@@ -17,6 +17,7 @@ export interface CharacterData {
 export interface ICharacterRepository {
     save(character: CharacterData): Promise<void>;
     load(id: string): Promise<CharacterData | null>;
+    listAll(): Promise<CharacterData[]>;
     // In a real app, we might have methods to append logs specifically
     // appendLog(characterId: string, log: CharacterLogEntry): Promise<void>;
 }

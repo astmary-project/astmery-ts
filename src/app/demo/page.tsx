@@ -2,7 +2,6 @@
 
 import { CharacterSheet } from '@/features/character/components/CharacterSheet';
 import { useCharacterSheet } from '@/features/character/hooks/useCharacterSheet';
-import { useEffect } from 'react';
 
 
 // Hack to seed the repository for the demo
@@ -17,27 +16,13 @@ import { useEffect } from 'react';
 // Or better, let's just make the hook handle "if empty, load sample data" logic for the demo.
 
 export default function DemoPage() {
-    const characterId = 'demo-character-1';
+    const characterId = '00000000-0000-0000-0000-000000000001';
     const { name, character, state, logs, isLoading, updateName, addLog, updateProfile } = useCharacterSheet(characterId);
     console.log('logs', logs);
 
-    // Seed data on first load if empty
-    useEffect(() => {
-        if (!isLoading && logs.length === 0 && name === '') {
-            // This is a bit hacky, but works for the demo to populate the "DB" via the hook
-            updateName('');
-            // In reality we'd use a proper seeder or the repository directly
-            updateProfile({});
-            // We can't batch add logs easily with the current hook API (one by one),
-            // so we might need to expose a "importLogs" or just loop.
-            // But wait, addLog adds a NEW log with new ID/Timestamp.
-            // We want to load EXISTING logs.
-            // The repository is empty. We need to fill the repository.
+    // Seed data logic removed to prevent infinite loop.
+    // Data is now persisted in Supabase.
 
-            // Solution: We should probably expose a "resetToSample" method in the hook for the demo,
-            // or just have the repository pre-filled in the infrastructure file.
-        }
-    }, [name, isLoading, logs.length, updateName, updateProfile]);
 
     // Better approach for Demo:
     // Since we can't easily seed via the hook without triggering "new log" logic,
@@ -53,6 +38,7 @@ export default function DemoPage() {
         <div className="min-h-screen bg-background py-8">
             <CharacterSheet
                 name={name}
+                onNameChange={updateName}
                 character={character}
                 state={state}
                 logs={logs}

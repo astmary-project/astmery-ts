@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CharacterCalculator } from '../domain/CharacterCalculator';
 import { CharacterLogEntry, CharacterState } from '../domain/CharacterLog';
 import { ICharacterRepository } from '../domain/repository/ICharacterRepository';
-import { InMemoryCharacterRepository } from '../infrastructure/InMemoryCharacterRepository';
+import { SupabaseCharacterRepository } from '../infrastructure/SupabaseCharacterRepository';
 
-// Singleton instance for demo purposes (so state persists across re-renders/navigation in memory)
-const repository: ICharacterRepository = new InMemoryCharacterRepository();
+// Use Supabase repository
+const repository: ICharacterRepository = new SupabaseCharacterRepository();
 
 export const useCharacterSheet = (characterId: string) => {
     const [name, setName] = useState<string>('');
@@ -24,7 +24,10 @@ export const useCharacterSheet = (characterId: string) => {
     // But for now, let's calculate it inside the hook body or useMemo.
     // Ideally, we might want to store the state in React state if calculation is heavy,
     // but CharacterCalculator is fast enough for now.
-    const state: CharacterState = CharacterCalculator.calculateState(logs);
+    // Calculated State
+    const state: CharacterState = useMemo(() => {
+        return CharacterCalculator.calculateState(logs);
+    }, [logs]);
 
     // Load initial data
     useEffect(() => {

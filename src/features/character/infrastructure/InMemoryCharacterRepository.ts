@@ -167,8 +167,13 @@ export class InMemoryCharacterRepository implements ICharacterRepository {
         const data = this.storage.get(id);
         if (!data) {
             console.warn(`[InMemoryRepo] Character ${id} not found`);
-            return null;
+            return data || null;
         }
         return JSON.parse(JSON.stringify(data)); // Return copy
+    }
+
+    async listAll(): Promise<CharacterData[]> {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return Array.from(this.storage.values());
     }
 }
