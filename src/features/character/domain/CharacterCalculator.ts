@@ -229,7 +229,12 @@ export class CharacterCalculator {
             // Create a scope with all stats
             // We default missing stats to 0 to avoid errors in formulas
             const scopeProxy = new Proxy({ ...state.stats }, {
-                get: (target, prop: string) => (prop in target ? target[prop] : 0)
+                get: (target, prop: string) => (prop in target ? target[prop] : 0),
+                has: (target, prop: string) => {
+                    if (prop in target) return true;
+                    if (typeof prop === 'string' && (prop in Math || prop === 'toJSON')) return false;
+                    return true;
+                }
             });
 
             // We also provide 'data' for the accessor syntax used for custom Japanese vars
