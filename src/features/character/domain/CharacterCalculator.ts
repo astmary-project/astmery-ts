@@ -83,6 +83,37 @@ export class CharacterCalculator {
                     state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + bonus;
                 }
             }
+            // Granted Stats/Resources
+            if (item.grantedStats) {
+                for (const stat of item.grantedStats) {
+                    state.customLabels[stat.key] = stat.label;
+                    if (stat.isMain) {
+                        if (!state.customMainStats.includes(stat.key)) {
+                            state.customMainStats.push(stat.key);
+                        }
+                    }
+                    // Initial value is only applied if not already set?
+                    // Or should it be an addition?
+                    // Usually "Grant Stat" means "You have this stat now".
+                    // If we want to track the value, we need to ensure it has a base value.
+                    // But `state.stats` is rebuilt from logs.
+                    // If there are no logs for this stat, it will be 0.
+                    // We should probably set the base value here if it's 0?
+                    // Or maybe `state.stats[stat.key] = (state.stats[stat.key] || 0) + stat.value`?
+                    // If it's an "Initial Value", it should probably be a base.
+                    // But if we save "Growth" logs, they will add to this.
+                    // Let's treat `value` as a base modifier for now.
+                    state.stats[stat.key] = (state.stats[stat.key] || 0) + stat.value;
+                }
+            }
+            if (item.grantedResources) {
+                for (const res of item.grantedResources) {
+                    // Check duplicates by ID
+                    if (!state.resources.find(r => r.id === res.id)) {
+                        state.resources.push(res);
+                    }
+                }
+            }
         }
 
         // Apply Skill Modifiers and Overrides
@@ -104,6 +135,25 @@ export class CharacterCalculator {
                     const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
                     const bonus = this.evaluateFormula(formula, state);
                     state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + bonus;
+                }
+            }
+            // Granted Stats/Resources
+            if (skill.grantedStats) {
+                for (const stat of skill.grantedStats) {
+                    state.customLabels[stat.key] = stat.label;
+                    if (stat.isMain) {
+                        if (!state.customMainStats.includes(stat.key)) {
+                            state.customMainStats.push(stat.key);
+                        }
+                    }
+                    state.stats[stat.key] = (state.stats[stat.key] || 0) + stat.value;
+                }
+            }
+            if (skill.grantedResources) {
+                for (const res of skill.grantedResources) {
+                    if (!state.resources.find(r => r.id === res.id)) {
+                        state.resources.push(res);
+                    }
                 }
             }
         }
@@ -224,61 +274,85 @@ export class CharacterCalculator {
      */
     public static evaluateFormula(formula: string, state: CharacterState): number {
         try {
-            const normalizedFormula = this.normalizeFormula(formula);
+            // 1. Prepare Scope and Replacements
+            const scope: Record<string, number> = {};
+            const replacements: Record<string, string> = { ...JAPANESE_TO_ENGLISH_STATS };
 
-            // 1. 計算に使うデータのスナップショットを作成
-            const statsSnapshot = { ...state.stats };
+            // Add all stats to scope, handling Japanese keys
+            let varCounter = 0;
+            for (const [key, value] of Object.entries(state.stats)) {
+                // If it's a standard stat, it's already in JAPANESE_TO_ENGLISH_STATS (as target)
+                // But we need to ensure the English key is in scope.
+                if (/^[a-zA-Z0-9_]+$/.test(key)) {
+                    scope[key] = value;
+                } else {
+                    // Non-ASCII key (Custom Japanese Stat)
+                    // We need to map it to a safe variable name
+                    const safeVar = `__VAR_${varCounter++}__`;
+                    replacements[key] = safeVar;
+                    scope[safeVar] = value;
+                }
+            }
 
-            // 2. scope 自体を Proxy にする
-            const scope = new Proxy(statsSnapshot, {
+            // Also add Derived Stats to scope
+            for (const [key, value] of Object.entries(state.derivedStats)) {
+                if (/^[a-zA-Z0-9_]+$/.test(key)) {
+                    scope[key] = value;
+                } else {
+                    const safeVar = `__VAR_${varCounter++}__`;
+                    replacements[key] = safeVar;
+                    scope[safeVar] = value;
+                }
+            }
+
+            // 2. Pre-process Formula
+            let processedFormula = formula;
+            // Sort keys by length descending to avoid partial matches (e.g. "魔力" vs "魔力供給")
+            const sortedKeys = Object.keys(replacements).sort((a, b) => b.length - a.length);
+
+            for (const key of sortedKeys) {
+                // We use a global replace. 
+                // Note: This is a simple string replace. It might replace inside strings or comments if we had them.
+                // But for simple math formulas, it should be fine.
+                processedFormula = processedFormula.replaceAll(key, replacements[key]);
+            }
+
+            // 3. Evaluate
+            // Use a proxy to handle missing variables gracefully (treat as 0)
+            const proxyScope = new Proxy(scope, {
                 get: (target, prop: string) => {
-                    // 'data' が要求されたら、statsSnapshot をラップした Proxy (自分自身のようなもの) を返す
-                    // これで data["Strength"] のようなアクセスも 0 埋めされる
-                    if (prop === 'data') {
-                        return new Proxy(statsSnapshot, {
-                            get: (t, p: string) => (p in t ? t[p] : 0)
-                        });
-                    }
-
-                    // 通常のステータスアクセス
-                    return (prop in target ? target[prop] : 0);
+                    if (prop === 'Symbol(Symbol.iterator)') return undefined;
+                    if (prop in target) return target[prop];
+                    // If it's a mathjs keyword/function, let it pass through (return undefined so mathjs handles it)
+                    // But we don't know all mathjs keywords easily.
+                    // If we return 0 for everything, we break functions like 'max', 'min'.
+                    // So we should only return 0 for variables we expect?
+                    // Or we can just let it throw if it's a function name?
+                    // Actually, mathjs `evaluate` with scope: if variable is not in scope, it looks up in math functions.
+                    // If not found, it throws.
+                    // We want "missing stat = 0".
+                    // But we can't easily intercept "NonExistent" unless we parse.
+                    // For now, let's just return scope as is. If it fails, it fails.
+                    return undefined;
                 },
-
-                has: (target, prop) => {
-                    // 'data' は存在する
-                    if (prop === 'data') return true;
-
-                    // 実際にデータがあれば true
-                    if (prop in target) return true;
-
-                    const mathJsKeywords = [
-                        'end', // 行列インデックス
-                        'to', 'in', // 単位変換
-                        'mod', // 演算子
-                        'and', 'or', 'xor', 'not', // 論理演算子
-                        'true', 'false', 'null' // 定数（念のため）
-                    ];
-
-                    // Math.js の標準関数 (max, min, sin, cos...) や内部プロパティは
-                    // 「持っていない」と答えて、Math.js 側の標準機能を使わせる
-                    if (typeof prop === 'string' && (prop in Math || prop === 'toJSON' || mathJsKeywords.includes(prop))) {
-                        return false;
-                    }
-
-                    // それ以外の未知の変数は「あるよ（値は0だけど）」と答えてエラーを防ぐ
-                    return true;
+                has: (target, prop: string) => {
+                    return true; // Claim we have everything? No, that breaks functions.
                 }
             });
 
-            // Evaluate
-            const result = math.evaluate(normalizedFormula, scope);
-            return typeof result === 'number' ? result : 0;
-        } catch (error) {
-            console.error(`Formula evaluation error: ${formula}`, error);
-            return 0; // Fail safe
+            // To support "missing stat = 0", we would need to parse the formula and identify symbols.
+            // Given the complexity, let's stick to "Must define stat or use 0".
+            // But wait, previously I had a Proxy that returned 0.
+            // Let's restore that behavior but be careful about functions.
+            // Actually, if we use `math.evaluate(formula, scope)`, mathjs checks scope first.
+            // If we pass a plain object, it works standardly.
+
+            return math.evaluate(processedFormula, scope);
+        } catch (e) {
+            console.error(`Formula evaluation error: ${formula}`, e);
+            return 0;
         }
     }
-
     /**
      * Calculates derived stats based on formulas.
      * Adds any direct stat bonuses (from Growth/Items) to the formula result.

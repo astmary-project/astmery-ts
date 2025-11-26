@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Item, Skill } from '@/features/character/domain/CharacterLog';
+import { Item, Resource, Skill } from '@/features/character/domain/CharacterLog';
 import { ABILITY_STATS, JAPANESE_TO_ENGLISH_STATS, STAT_LABELS } from '@/features/character/domain/constants';
 import { useCharacterSheet } from '@/features/character/hooks/useCharacterSheet';
 import { ChevronDown, Plus, Trash2 } from 'lucide-react';
@@ -33,6 +33,20 @@ interface ItemInput {
     effect: string;
 }
 
+interface CustomStatInput {
+    key: string;
+    label: string;
+    value: string;
+    isMain: boolean;
+}
+
+interface ResourceInput {
+    id: string;
+    name: string;
+    max: string;
+    initial: string;
+}
+
 export default function CharacterSetupPage() {
     const params = useParams();
     const router = useRouter();
@@ -48,6 +62,8 @@ export default function CharacterSetupPage() {
     const [specialtyElements, setSpecialtyElements] = useState<SpecialtyElementInput[]>([]);
     const [skills, setSkills] = useState<SkillInput[]>([]);
     const [equipment, setEquipment] = useState<ItemInput[]>([]);
+    const [customStats, setCustomStats] = useState<CustomStatInput[]>([]);
+    const [resources, setResources] = useState<ResourceInput[]>([]);
 
     const [isInitialized, setIsInitialized] = useState(false);
     const initialSkillsRef = useRef<Skill[]>([]);
@@ -93,9 +109,29 @@ export default function CharacterSetupPage() {
                 effect: i.description || '',
             })));
 
+            // Load Custom Stats
+            const loadedCustomStats: CustomStatInput[] = [];
+            for (const [key, label] of Object.entries(state.customLabels)) {
+                loadedCustomStats.push({
+                    key,
+                    label,
+                    value: (state.stats[key] || 0).toString(),
+                    isMain: state.customMainStats.includes(key),
+                });
+            }
+            setCustomStats(loadedCustomStats);
+
+            // Load Resources
+            setResources(state.resources.map(r => ({
+                id: r.id,
+                name: r.name,
+                max: r.max.toString(),
+                initial: r.initial.toString(),
+            })));
+
             setIsInitialized(true);
         }
-    }, [isLoading, isInitialized, name, character, state.stats, state.skills, state.equipment]);
+    }, [isLoading, isInitialized, name, character, state.stats, state.skills, state.equipment, state.customLabels, state.customMainStats, state.resources]);
 
     const handleStatChange = (key: string, value: string) => {
         const numValue = parseInt(value) || 0;
@@ -151,23 +187,109 @@ export default function CharacterSetupPage() {
         setEquipment(equipment.filter((_, i) => i !== index));
     };
 
+    // Custom Stats Handlers
+    const handleCustomStatChange = (index: number, field: keyof CustomStatInput, value: any) => {
+        const newStats = [...customStats];
+        // @ts-ignore
+        newStats[index][field] = value;
+        setCustomStats(newStats);
+    };
+    const addCustomStat = () => {
+        setCustomStats([...customStats, { key: '', label: '', value: '0', isMain: false }]);
+    };
+    const removeCustomStat = (index: number) => {
+        setCustomStats(customStats.filter((_, i) => i !== index));
+    };
+
+    // Resource Handlers
+    const handleResourceChange = (index: number, field: keyof ResourceInput, value: string) => {
+        const newResources = [...resources];
+        // @ts-ignore
+        newResources[index][field] = value;
+        setResources(newResources);
+    };
+    const addResource = () => {
+        setResources([...resources, { id: crypto.randomUUID(), name: '', max: '10', initial: '10' }]);
+    };
+    const removeResource = (index: number) => {
+        setResources(resources.filter((_, i) => i !== index));
+    };
+
     const parseEffect = (effect: string) => {
         const statModifiers: Record<string, number> = {};
-        // Split by comma or space
+        const dynamicModifiers: Record<string, string> = {};
+        const grantedStats: { key: string; label: string; value: number; isMain?: boolean }[] = [];
+        const grantedResources: Resource[] = [];
+
+        // Split by comma or space, but respect parentheses?
+        // Simple split might break "GrantStat:foo(bar)=1" if we split by space and there are spaces inside?
+        // Let's stick to simple split for now, assuming no spaces in labels or using specific delimiters.
         const parts = effect.split(/[,、\s]+/);
         for (const part of parts) {
-            const match = part.match(/^(.+?)([+\-])(\d+)$/);
-            if (match) {
-                const rawStat = match[1].trim();
-                const op = match[2];
-                const val = parseInt(match[3]);
+            if (!part.trim()) continue;
+
+            // 1. GrantStat:Key(Label)=Value OR GrantStat:Label=Value
+            // e.g. GrantStat:karma(カルマ)=0  -> Key: karma, Label: カルマ
+            // e.g. GrantStat:カルマ=0        -> Key: カルマ, Label: カルマ
+            const grantStatMatch = part.match(/^GrantStat:(.+?)(?:\((.+?)\))?=(\d+)$/i);
+            if (grantStatMatch) {
+                const rawKey = grantStatMatch[1];
+                const rawLabel = grantStatMatch[2];
+                const val = parseInt(grantStatMatch[3]);
+
+                grantedStats.push({
+                    key: rawKey,
+                    label: rawLabel || rawKey,
+                    value: val,
+                    isMain: true
+                });
+                continue;
+            }
+
+            // 2. GrantResource:Name=Max
+            // e.g. GrantResource:弾薬=10
+            const grantResourceMatch = part.match(/^GrantResource:(.+?)=(\d+)$/i);
+            if (grantResourceMatch) {
+                const name = grantResourceMatch[1];
+                const max = parseInt(grantResourceMatch[2]);
+                grantedResources.push({
+                    id: crypto.randomUUID(), // Generate ID for new resource
+                    name: name,
+                    max: max,
+                    initial: max
+                });
+                continue;
+            }
+
+            // 3. Static: Stat+N or Stat-N
+            const staticMatch = part.match(/^(.+?)([+\-])(\d+)$/);
+            if (staticMatch) {
+                const rawStat = staticMatch[1].trim();
+                const op = staticMatch[2];
+                const val = parseInt(staticMatch[3]);
                 const statKey = JAPANESE_TO_ENGLISH_STATS[rawStat] || rawStat;
                 if (statKey) {
                     statModifiers[statKey] = op === '-' ? -val : val;
                 }
+                continue;
+            }
+
+            // 4. Dynamic: Stat:Formula (e.g. 攻撃:筋力/2)
+            const dynamicMatch = part.match(/^(.+?)[:：](.+)$/);
+            if (dynamicMatch) {
+                const rawStat = dynamicMatch[1].trim();
+                const formula = dynamicMatch[2].trim();
+                const statKey = JAPANESE_TO_ENGLISH_STATS[rawStat] || rawStat;
+                if (statKey) {
+                    let processedFormula = formula;
+                    for (const [jp, en] of Object.entries(JAPANESE_TO_ENGLISH_STATS)) {
+                        processedFormula = processedFormula.replaceAll(jp, en);
+                    }
+                    dynamicModifiers[statKey] = processedFormula;
+                }
             }
         }
-        return statModifiers;
+        return { statModifiers, dynamicModifiers, grantedStats, grantedResources };
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -199,15 +321,6 @@ export default function CharacterSetupPage() {
         // 2. Parse Benefits and add logs
         for (const el of specialtyElements) {
             if (!el.benefit) continue;
-            // ... (Same parsing logic as before, but maybe we should rely on user to not duplicate?)
-            // Actually, for Specialty Elements, we just append logs.
-            // But wait, if we re-save, we might duplicate logs.
-            // Ideally we should check if this log already exists.
-            // For now, let's assume this is mostly for initial setup.
-            // Or we can just skip this part if we assume user edits stats directly in the form?
-            // No, the user expects "Benefit" to apply automatically.
-            // Let's keep it simple: Parse and add logs.
-
             const match = el.benefit.match(/^(.+?)\s*([+\-])\s*(\d+)$/);
             if (match) {
                 const rawStat = match[1].trim();
@@ -247,13 +360,16 @@ export default function CharacterSetupPage() {
 
         // Added or Modified Skills
         for (const s of skills) {
-            const statModifiers = parseEffect(s.effect);
+            const { statModifiers, dynamicModifiers, grantedStats, grantedResources } = parseEffect(s.effect);
             const skillObj: Skill = {
                 id: s.id,
                 name: s.name,
                 type: s.type,
                 description: s.effect,
                 statModifiers: Object.keys(statModifiers).length > 0 ? statModifiers : undefined,
+                dynamicModifiers: Object.keys(dynamicModifiers).length > 0 ? dynamicModifiers : undefined,
+                grantedStats: grantedStats.length > 0 ? grantedStats : undefined,
+                grantedResources: grantedResources.length > 0 ? grantedResources : undefined,
             };
 
             const initial = initialSkillsRef.current.find(is => is.id === s.id);
@@ -267,11 +383,43 @@ export default function CharacterSetupPage() {
                 });
             } else {
                 // Modified?
-                // Simple check: if name, type, or effect changed
-                // Or just always update if it exists (Remove + Add)
-                // Let's check if content changed to avoid log spam
                 const initialModifiers = initial.statModifiers || {};
-                const isDiff = initial.name !== s.name || initial.type !== s.type || initial.description !== s.effect || JSON.stringify(initialModifiers) !== JSON.stringify(statModifiers);
+                const initialDynamic = initial.dynamicModifiers || {};
+                const initialGrantedStats = initial.grantedStats || [];
+                const initialGrantedResources = initial.grantedResources || [];
+
+                const isDiff = initial.name !== s.name ||
+                    initial.type !== s.type ||
+                    initial.description !== s.effect ||
+                    JSON.stringify(initialModifiers) !== JSON.stringify(statModifiers) ||
+                    JSON.stringify(initialDynamic) !== JSON.stringify(dynamicModifiers) ||
+                    JSON.stringify(initialGrantedStats) !== JSON.stringify(grantedStats) ||
+                    // For resources, ID changes every time we parse if we generate new UUID.
+                    // We should probably try to preserve IDs if name matches?
+                    // Or just ignore ID diff if name/max/initial are same?
+                    // But `grantedResources` in `Skill` object needs IDs.
+                    // If we generate new IDs, it will always be a diff.
+                    // And `CharacterCalculator` uses ID to check duplicates.
+                    // If ID changes, it's a new resource.
+                    // This is tricky.
+                    // Ideally, `parseEffect` should not generate IDs, or we should reuse existing ones.
+                    // But `parseEffect` is stateless.
+                    // Let's assume for now that if we edit the skill, we might reset the resource (get a new one).
+                    // This is acceptable for MVP.
+                    // To avoid infinite loop or constant updates, we need to be careful.
+                    // But here we are just comparing JSON stringify.
+                    // Since we generate UUID in `parseEffect`, `grantedResources` will ALWAYS differ from `initial`.
+                    // So we will always update the skill.
+                    // That's fine, `FORGET` then `LEARN` is safe.
+                    // But `CharacterCalculator` will see a NEW resource ID and add it.
+                    // The OLD resource ID will remain in `state.resources` if we don't remove it?
+                    // `FORGET_SKILL` removes the skill, but `CharacterCalculator` doesn't automatically remove resources added by it?
+                    // `CharacterCalculator` rebuilds state from logs.
+                    // If `FORGET_SKILL` is logged, the skill is removed from `state.skills`.
+                    // The `calculateState` iterates `state.skills` to add resources.
+                    // If skill is gone, resource is not added.
+                    // So it works! The resource comes from the skill presence.
+                    JSON.stringify(initialGrantedResources.map(r => ({ ...r, id: '' }))) !== JSON.stringify(grantedResources.map(r => ({ ...r, id: '' })));
 
                 if (isDiff) {
                     logsToAdd.push({
@@ -308,13 +456,16 @@ export default function CharacterSetupPage() {
 
         // Added or Modified Items
         for (const i of equipment) {
-            const statModifiers = parseEffect(i.effect);
+            const { statModifiers, dynamicModifiers, grantedStats, grantedResources } = parseEffect(i.effect);
             const itemObj: Item = {
                 id: i.id,
                 name: i.name,
                 type: i.type,
                 description: i.effect,
                 statModifiers: Object.keys(statModifiers).length > 0 ? statModifiers : undefined,
+                dynamicModifiers: Object.keys(dynamicModifiers).length > 0 ? dynamicModifiers : undefined,
+                grantedStats: grantedStats.length > 0 ? grantedStats : undefined,
+                grantedResources: grantedResources.length > 0 ? grantedResources : undefined,
             };
 
             const initial = initialEquipmentRef.current.find(ii => ii.id === i.id);
@@ -329,7 +480,17 @@ export default function CharacterSetupPage() {
             } else {
                 // Modified?
                 const initialModifiers = initial.statModifiers || {};
-                const isDiff = initial.name !== i.name || initial.type !== i.type || initial.description !== i.effect || JSON.stringify(initialModifiers) !== JSON.stringify(statModifiers);
+                const initialDynamic = initial.dynamicModifiers || {};
+                const initialGrantedStats = initial.grantedStats || [];
+                const initialGrantedResources = initial.grantedResources || [];
+
+                const isDiff = initial.name !== i.name ||
+                    initial.type !== i.type ||
+                    initial.description !== i.effect ||
+                    JSON.stringify(initialModifiers) !== JSON.stringify(statModifiers) ||
+                    JSON.stringify(initialDynamic) !== JSON.stringify(dynamicModifiers) ||
+                    JSON.stringify(initialGrantedStats) !== JSON.stringify(grantedStats) ||
+                    JSON.stringify(initialGrantedResources.map(r => ({ ...r, id: '' }))) !== JSON.stringify(grantedResources.map(r => ({ ...r, id: '' })));
 
                 if (isDiff) {
                     logsToAdd.push({
@@ -345,6 +506,60 @@ export default function CharacterSetupPage() {
                         item: itemObj,
                     });
                 }
+            }
+        }
+
+        // 5. Custom Stats
+        for (const cs of customStats) {
+            if (!cs.key) continue;
+
+            // Check if label/main status changed
+            const currentLabel = state.customLabels[cs.key];
+            const isCurrentlyMain = state.customMainStats.includes(cs.key);
+
+            if (currentLabel !== cs.label || isCurrentlyMain !== cs.isMain) {
+                logsToAdd.push({
+                    id: crypto.randomUUID(),
+                    timestamp: Date.now(),
+                    type: 'REGISTER_STAT_LABEL',
+                    statKey: cs.key,
+                    stringValue: cs.label,
+                    isMainStat: cs.isMain,
+                });
+            }
+
+            // Check value diff
+            const currentVal = state.stats[cs.key] || 0;
+            const targetVal = parseInt(cs.value) || 0;
+            const diff = targetVal - currentVal;
+
+            if (diff !== 0) {
+                logsToAdd.push({
+                    id: crypto.randomUUID(),
+                    timestamp: Date.now(),
+                    type: 'GROWTH',
+                    statKey: cs.key,
+                    value: diff,
+                    description: `カスタムステータス(${cs.label})調整`,
+                });
+            }
+        }
+
+        // 6. Resources
+        const existingResourceIds = new Set(state.resources.map(r => r.id));
+        for (const r of resources) {
+            if (!existingResourceIds.has(r.id)) {
+                logsToAdd.push({
+                    id: crypto.randomUUID(),
+                    timestamp: Date.now(),
+                    type: 'REGISTER_RESOURCE',
+                    resource: {
+                        id: r.id,
+                        name: r.name,
+                        max: parseInt(r.max) || 0,
+                        initial: parseInt(r.initial) || 0,
+                    },
+                });
             }
         }
 
@@ -481,6 +696,144 @@ export default function CharacterSetupPage() {
                                 ))}
                             </div>
                         </div>
+
+                        {/* Custom Stats */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold border-b pb-2">カスタムステータス</h3>
+                            <div className="space-y-3">
+                                {customStats.map((stat, index) => (
+                                    <div key={index} className="flex gap-2 items-center">
+                                        <Input
+                                            placeholder="ID (例: karma)"
+                                            value={stat.key}
+                                            onChange={e => handleCustomStatChange(index, 'key', e.target.value)}
+                                            className="w-1/3"
+                                        />
+                                        <Input
+                                            placeholder="表示名 (例: カルマ)"
+                                            value={stat.label}
+                                            onChange={e => handleCustomStatChange(index, 'label', e.target.value)}
+                                            className="w-1/3"
+                                        />
+                                        <Input
+                                            type="number"
+                                            placeholder="値"
+                                            value={stat.value}
+                                            onChange={e => handleCustomStatChange(index, 'value', e.target.value)}
+                                            className="w-20"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor={`main-${index}`} className="text-xs whitespace-nowrap">メイン</Label>
+                                            <input
+                                                type="checkbox"
+                                                id={`main-${index}`}
+                                                checked={stat.isMain}
+                                                onChange={e => handleCustomStatChange(index, 'isMain', e.target.checked)}
+                                            />
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => removeCustomStat(index)}
+                                            className="text-destructive"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                            <Button type="button" variant="outline" size="sm" onClick={addCustomStat}>
+                                <Plus className="mr-2 h-4 w-4" /> ステータスを追加
+                            </Button>
+                        </div>
+
+                        {/* Resources */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold border-b pb-2">リソース (HP/MP以外)</h3>
+                            <div className="space-y-3">
+                                {resources.map((res, index) => (
+                                    <div key={res.id} className="flex gap-2 items-center">
+                                        <Input
+                                            placeholder="名称 (例: 弾薬)"
+                                            value={res.name}
+                                            onChange={e => handleResourceChange(index, 'name', e.target.value)}
+                                            className="flex-1"
+                                        />
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-sm">最大:</span>
+                                            <Input
+                                                type="number"
+                                                value={res.max}
+                                                onChange={e => handleResourceChange(index, 'max', e.target.value)}
+                                                className="w-20"
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-sm">初期:</span>
+                                            <Input
+                                                type="number"
+                                                value={res.initial}
+                                                onChange={e => handleResourceChange(index, 'initial', e.target.value)}
+                                                className="w-20"
+                                            />
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => removeResource(index)}
+                                            className="text-destructive"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                            <Button type="button" variant="outline" size="sm" onClick={addResource}>
+                                <Plus className="mr-2 h-4 w-4" /> リソースを追加
+                            </Button>
+                        </div>
+
+                        {/* Usage Guide */}
+                        <details className="group border rounded-md bg-muted/20">
+                            <summary className="cursor-pointer p-3 font-medium hover:bg-muted/50 transition-colors list-none flex items-center justify-between text-sm">
+                                <span className="flex items-center gap-2">
+                                    <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs">Help</span>
+                                    効果・特殊ステータスの記述方法
+                                </span>
+                                <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                            </summary>
+                            <div className="p-3 pt-0 text-sm text-muted-foreground space-y-3 border-t bg-card/50">
+                                <div className="grid gap-2 mt-2">
+                                    <div>
+                                        <span className="font-semibold text-foreground">基本補正</span>
+                                        <p className="text-xs">ステータスを固定値で増減させます。</p>
+                                        <code className="text-xs bg-muted px-1 py-0.5 rounded block mt-1 w-fit">攻撃+1</code>
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold text-foreground">計算式による補正</span>
+                                        <p className="text-xs">他のステータスを参照して補正値を計算します。</p>
+                                        <code className="text-xs bg-muted px-1 py-0.5 rounded block mt-1 w-fit">攻撃:筋力/2</code>
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold text-foreground">カスタムステータスの追加</span>
+                                        <p className="text-xs">新しいステータス項目を作成します。日本語IDが使えます。</p>
+                                        <code className="text-xs bg-muted px-1 py-0.5 rounded block mt-1 w-fit">GrantStat:カルマ=0</code>
+                                        <p className="text-xs mt-1">※ IDを別途指定する場合: <code className="bg-muted px-1 rounded">GrantStat:karma(カルマ)=0</code></p>
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold text-foreground">リソースの追加</span>
+                                        <p className="text-xs">HP/MPのような消費ゲージを作成します。</p>
+                                        <code className="text-xs bg-muted px-1 py-0.5 rounded block mt-1 w-fit">GrantResource:弾薬=10</code>
+                                    </div>
+                                    <div className="text-xs border-t pt-2 mt-1">
+                                        ※ 複数の効果を書く場合はスペースで区切ってください。<br />
+                                        例: <code className="bg-muted px-1 rounded">攻撃+1 GrantStat:カルマ=0</code>
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
 
                         {/* Skills */}
                         <div className="space-y-4">

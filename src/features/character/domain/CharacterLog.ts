@@ -63,6 +63,9 @@ export interface Skill {
     formulaOverrides?: Record<string, string>; // e.g., { "Defense": "Body + 5" }
     statModifiers?: Record<string, number>; // Fixed adds e.g. { "Science": 1 }
     dynamicModifiers?: Record<string, string>; // Formula adds e.g. { "Attack": "Strength / 2" }
+    // Custom Definitions
+    grantedStats?: { key: string; label: string; value: number; isMain?: boolean }[];
+    grantedResources?: Resource[];
 }
 
 export interface Item {
@@ -77,6 +80,9 @@ export interface Item {
     // Mechanics (for Weapons/Items with active use)
     roll?: string; // e.g. "2d6 + Combat"
     effect?: string; // e.g. "k20 + Combat + 5"
+    // Custom Definitions
+    grantedStats?: { key: string; label: string; value: number; isMain?: boolean }[];
+    grantedResources?: Resource[];
 }
 
 export interface CharacterState {
