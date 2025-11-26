@@ -7,8 +7,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { STANDARD_STAT_ORDER, STAT_LABELS } from '@/features/character/domain/constants';
 import { useCharacterSheet } from '@/features/character/hooks/useCharacterSheet';
+import { Plus, Trash2 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
+interface SpecialtyElementInput {
+    name: string;
+    benefit: string;
+}
 
 export default function CharacterSetupPage() {
     const params = useParams();
@@ -20,9 +26,9 @@ export default function CharacterSetupPage() {
     const [formData, setFormData] = useState({
         name: '',
         bio: '',
-        specialtyElements: '',
         stats: {} as Record<string, number>,
     });
+    const [specialtyElements, setSpecialtyElements] = useState<SpecialtyElementInput[]>([]);
 
     const [isInitialized, setIsInitialized] = useState(false);
 
@@ -32,9 +38,22 @@ export default function CharacterSetupPage() {
             setFormData({
                 name: name,
                 bio: character?.bio || '',
-                specialtyElements: character?.specialtyElements?.join(', ') || '',
                 stats: { ...state.stats },
             });
+
+            // Parse existing specialty elements
+            const elements = (character?.specialtyElements || []).map(el => {
+                const match = el.match(/^(.+)\((.+)\)$/);
+                if (match) {
+                    return { name: match[1], benefit: match[2] };
+                }
+                return { name: el, benefit: '' };
+            });
+            if (elements.length === 0) {
+                elements.push({ name: '', benefit: '' });
+            }
+            setSpecialtyElements(elements);
+
             setIsInitialized(true);
         }
     }, [isLoading, isInitialized, name, character, state.stats]);
@@ -50,19 +69,43 @@ export default function CharacterSetupPage() {
         }));
     };
 
+    const handleElementChange = (index: number, field: keyof SpecialtyElementInput, value: string) => {
+        const newElements = [...specialtyElements];
+        newElements[index][field] = value;
+        setSpecialtyElements(newElements);
+    };
+
+    const addElement = () => {
+        setSpecialtyElements([...specialtyElements, { name: '', benefit: '' }]);
+    };
+
+    const removeElement = (index: number) => {
+        const newElements = specialtyElements.filter((_, i) => i !== index);
+        setSpecialtyElements(newElements);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         // 1. Update Profile
         updateName(formData.name);
+
+        // Format specialty elements: "Name(Benefit)" or just "Name"
+        const formattedElements = specialtyElements
+            .filter(el => el.name.trim() !== '')
+            .map(el => {
+                if (el.benefit.trim()) {
+                    return `${el.name}(${el.benefit})`;
+                }
+                return el.name;
+            });
+
         updateProfile({
             bio: formData.bio,
-            specialtyElements: formData.specialtyElements.split(',').map(s => s.trim()).filter(Boolean),
+            specialtyElements: formattedElements,
         });
 
         // 2. Update Stats (Generate Growth Logs for differences)
-        // This is a simplified approach. In a real app, we might want to "reset" or "set base".
-        // Here we just add the difference.
         for (const key of STANDARD_STAT_ORDER) {
             const currentVal = state.stats[key] || 0;
             const targetVal = formData.stats[key] || 0;
@@ -73,7 +116,7 @@ export default function CharacterSetupPage() {
                     type: 'GROWTH',
                     statKey: key,
                     value: diff,
-                    description: 'Setup Wizard Adjustment',
+                    description: 'セットアップウィザードによる調整',
                 });
             }
         }
@@ -83,21 +126,21 @@ export default function CharacterSetupPage() {
     };
 
     if (isLoading) {
-        return <div className="p-8 text-center">Loading...</div>;
+        return <div className="p-8 text-center">読み込み中...</div>;
     }
 
     return (
         <div className="container mx-auto py-8 px-4 max-w-2xl">
             <Card>
                 <CardHeader>
-                    <CardTitle>Character Setup</CardTitle>
+                    <CardTitle>キャラクター設定 (セットアップ)</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* Basic Info */}
                         <div className="space-y-4">
                             <div className="grid w-full items-center gap-1.5">
-                                <Label htmlFor="name">Name</Label>
+                                <Label htmlFor="name">キャラクター名</Label>
                                 <Input
                                     id="name"
                                     value={formData.name}
@@ -107,7 +150,7 @@ export default function CharacterSetupPage() {
                             </div>
 
                             <div className="grid w-full items-center gap-1.5">
-                                <Label htmlFor="bio">Bio</Label>
+                                <Label htmlFor="bio">プロフィール / 設定</Label>
                                 <Textarea
                                     id="bio"
                                     value={formData.bio}
@@ -116,20 +159,47 @@ export default function CharacterSetupPage() {
                                 />
                             </div>
 
-                            <div className="grid w-full items-center gap-1.5">
-                                <Label htmlFor="specialty">Specialty Elements (comma separated)</Label>
-                                <Input
-                                    id="specialty"
-                                    value={formData.specialtyElements}
-                                    onChange={e => setFormData({ ...formData, specialtyElements: e.target.value })}
-                                    placeholder="Fire, Water, Light"
-                                />
+                            {/* Specialty Elements */}
+                            <div className="space-y-2">
+                                <Label>得意属性・要素</Label>
+                                <div className="space-y-2">
+                                    {specialtyElements.map((el, index) => (
+                                        <div key={index} className="flex gap-2 items-start">
+                                            <div className="flex-1">
+                                                <Input
+                                                    placeholder="属性名 (例: 火)"
+                                                    value={el.name}
+                                                    onChange={e => handleElementChange(index, 'name', e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="flex-1">
+                                                <Input
+                                                    placeholder="恩恵 (例: 攻撃+1)"
+                                                    value={el.benefit}
+                                                    onChange={e => handleElementChange(index, 'benefit', e.target.value)}
+                                                />
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => removeElement(index)}
+                                                className="text-destructive hover:text-destructive/90"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <Button type="button" variant="outline" size="sm" onClick={addElement} className="mt-2">
+                                    <Plus className="mr-2 h-4 w-4" /> 要素を追加
+                                </Button>
                             </div>
                         </div>
 
                         {/* Stats */}
                         <div className="space-y-4">
-                            <h3 className="text-lg font-semibold">Base Stats</h3>
+                            <h3 className="text-lg font-semibold">基礎ステータス</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 {STANDARD_STAT_ORDER.map(key => (
                                     <div key={key} className="grid w-full items-center gap-1.5">
@@ -147,10 +217,10 @@ export default function CharacterSetupPage() {
 
                         <div className="flex justify-end gap-4 pt-4">
                             <Button type="button" variant="outline" onClick={() => router.back()}>
-                                Cancel
+                                キャンセル
                             </Button>
                             <Button type="submit">
-                                Save & Finish
+                                保存して完了
                             </Button>
                         </div>
                     </form>

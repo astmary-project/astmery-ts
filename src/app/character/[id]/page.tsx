@@ -21,7 +21,7 @@ export default function CharacterDetailPage() {
             <div className="container mx-auto px-4 mb-4 flex justify-end">
                 <Link href={`/character/${characterId}/setup`}>
                     <Button variant="outline" size="sm">
-                        <Settings className="mr-2 h-4 w-4" /> Setup / Bulk Edit
+                        <Settings className="mr-2 h-4 w-4" /> 設定 / 一括編集
                     </Button>
                 </Link>
             </div>

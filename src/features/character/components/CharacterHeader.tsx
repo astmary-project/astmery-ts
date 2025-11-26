@@ -98,9 +98,9 @@ export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
                         {/* EXP Bar */}
                         <div className="space-y-1">
                             <div className="flex justify-between text-xs text-muted-foreground">
-                                <span>EXP Usage</span>
+                                <span>経験点使用量</span>
                                 <span>
-                                    <span className="font-medium text-foreground">{exp.used}</span> / {exp.total} (Free: {exp.free})
+                                    <span className="font-medium text-foreground">{exp.used}</span> / {exp.total} (空き: {exp.free})
                                 </span>
                             </div>
                             <Progress value={expPercentage} className="h-2" />

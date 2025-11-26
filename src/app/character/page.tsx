@@ -36,7 +36,7 @@ export default function CharacterListPage() {
         const newId = crypto.randomUUID();
         const newCharacter = {
             id: newId,
-            name: 'New Character',
+            name: '新規キャラクター',
             logs: [],
             profile: {},
         };
@@ -46,20 +46,20 @@ export default function CharacterListPage() {
             router.push(`/character/${newId}/setup`);
         } catch (error) {
             console.error('Failed to create character', error);
-            alert('Failed to create character. Please try again.');
+            alert('キャラクターの作成に失敗しました。');
         }
     };
 
     if (isLoading) {
-        return <div className="p-8 text-center">Loading...</div>;
+        return <div className="p-8 text-center">読み込み中...</div>;
     }
 
     return (
         <div className="container mx-auto py-8 px-4">
             <div className="flex justify-between items-center mb-8">
-                <h1 className="text-3xl font-bold">Characters</h1>
+                <h1 className="text-3xl font-bold">キャラクター一覧</h1>
                 <Button onClick={handleCreateNew}>
-                    <Plus className="mr-2 h-4 w-4" /> Create New
+                    <Plus className="mr-2 h-4 w-4" /> 新規作成
                 </Button>
             </div>
 
@@ -78,7 +78,7 @@ export default function CharacterListPage() {
                             </CardHeader>
                             <CardContent>
                                 <p className="text-sm text-muted-foreground line-clamp-3">
-                                    {char.profile?.bio || 'No biography.'}
+                                    {char.profile?.bio || 'プロフィール未設定'}
                                 </p>
                                 <div className="mt-4 flex flex-wrap gap-1">
                                     {char.profile?.specialtyElements?.map((el: string) => (
@@ -94,7 +94,7 @@ export default function CharacterListPage() {
 
                 {characters.length === 0 && (
                     <div className="col-span-full text-center py-12 text-muted-foreground">
-                        No characters found. Create one to get started!
+                        キャラクターが見つかりません。「新規作成」から作成してください。
                     </div>
                 )}
             </div>
