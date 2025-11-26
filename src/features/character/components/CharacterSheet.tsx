@@ -134,7 +134,7 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onNameC
                                     className="h-8 w-8 text-muted-foreground hover:text-destructive"
                                     onClick={() => onAddLog({
                                         type: 'FORGET_SKILL',
-                                        skill: { id: skill.id } as any, // IDだけで十分なので型アサーションで逃げるか、Partial<Skill>を許容するか
+                                        skill: { id: skill.id } as any,
                                         description: `Forgot ${skill.name}`
                                     })}
                                 >
@@ -144,14 +144,24 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onNameC
                             <div className="flex justify-between items-start mb-1">
                                 <div className="font-medium flex items-center gap-2">
                                     {skill.name}
-                                    {skill.cost && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">{skill.cost}</span>}
-                                </div>
-                                <div className="text-xs text-muted-foreground font-mono">
-                                    {skill.timing && <span>{skill.timing}</span>}
-                                    {skill.range && <span className="ml-2">/ {skill.range}</span>}
+                                    {skill.cost && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">Cost: {skill.cost}</span>}
+                                    {skill.magicGrade && <span className="text-xs bg-secondary/10 text-secondary-foreground px-1.5 py-0.5 rounded">Grade: {skill.magicGrade}</span>}
                                 </div>
                             </div>
-                            <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+
+                            {/* Detailed Stats Grid */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 text-xs text-muted-foreground mb-2 font-mono">
+                                {skill.timing && <div><span className="opacity-70">Timing:</span> {skill.timing}</div>}
+                                {skill.range && <div><span className="opacity-70">Range:</span> {skill.range}</div>}
+                                {skill.target && <div><span className="opacity-70">Target:</span> {skill.target}</div>}
+                                {skill.shape && <div><span className="opacity-70">Shape:</span> {skill.shape}</div>}
+                                {skill.duration && <div><span className="opacity-70">Duration:</span> {skill.duration}</div>}
+                                {skill.cooldown && <div><span className="opacity-70">CT:</span> {skill.cooldown}</div>}
+                                {skill.activeCheck && <div><span className="opacity-70">Active:</span> {skill.activeCheck}</div>}
+                                {skill.passiveCheck && <div><span className="opacity-70">Passive:</span> {skill.passiveCheck}</div>}
+                            </div>
+
+                            <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap border-t pt-2 mt-1">
                                 {skill.description}
                             </div>
 
@@ -187,6 +197,16 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onNameC
                                         </div>
                                     )}
                                 </div>
+                            )}
+
+                            {/* Chat Palette */}
+                            {skill.chatPalette && (
+                                <details className="mt-2 pt-2 border-t text-xs">
+                                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors">Chat Palette</summary>
+                                    <div className="mt-2 p-2 bg-muted/50 rounded font-mono whitespace-pre-wrap select-all">
+                                        {skill.chatPalette}
+                                    </div>
+                                </details>
                             )}
                         </div>
                     ))}

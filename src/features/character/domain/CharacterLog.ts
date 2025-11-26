@@ -59,6 +59,13 @@ export interface Skill {
     cost?: string;
     roll?: string;
     effect?: string;
+    // Detailed Mechanics
+    magicGrade?: string; // 魔術グレード
+    shape?: string;      // 形状
+    duration?: string;   // 継続
+    activeCheck?: string; // 能動判定
+    passiveCheck?: string; // 受動判定
+    chatPalette?: string; // チャットパレット
     // Dynamic effects
     formulaOverrides?: Record<string, string>; // e.g., { "Defense": "Body + 5" }
     statModifiers?: Record<string, number>; // Fixed adds e.g. { "Science": 1 }
