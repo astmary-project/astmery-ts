@@ -251,9 +251,17 @@ export class CharacterCalculator {
                     // 実際にデータがあれば true
                     if (prop in target) return true;
 
+                    const mathJsKeywords = [
+                        'end', // 行列インデックス
+                        'to', 'in', // 単位変換
+                        'mod', // 演算子
+                        'and', 'or', 'xor', 'not', // 論理演算子
+                        'true', 'false', 'null' // 定数（念のため）
+                    ];
+
                     // Math.js の標準関数 (max, min, sin, cos...) や内部プロパティは
                     // 「持っていない」と答えて、Math.js 側の標準機能を使わせる
-                    if (typeof prop === 'string' && (prop in Math || prop === 'toJSON' || prop === 'end')) {
+                    if (typeof prop === 'string' && (prop in Math || prop === 'toJSON' || mathJsKeywords.includes(prop))) {
                         return false;
                     }
 
