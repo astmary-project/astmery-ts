@@ -226,22 +226,41 @@ export class CharacterCalculator {
         try {
             const normalizedFormula = this.normalizeFormula(formula);
 
-            // Create a scope with all stats
-            // We default missing stats to 0 to avoid errors in formulas
-            const scopeProxy = new Proxy({ ...state.stats }, {
-                get: (target, prop: string) => (prop in target ? target[prop] : 0),
-                has: (target, prop: string) => {
+            // 1. 計算に使うデータのスナップショットを作成
+            const statsSnapshot = { ...state.stats };
+
+            // 2. scope 自体を Proxy にする
+            const scope = new Proxy(statsSnapshot, {
+                get: (target, prop: string) => {
+                    // 'data' が要求されたら、statsSnapshot をラップした Proxy (自分自身のようなもの) を返す
+                    // これで data["Strength"] のようなアクセスも 0 埋めされる
+                    if (prop === 'data') {
+                        return new Proxy(statsSnapshot, {
+                            get: (t, p: string) => (p in t ? t[p] : 0)
+                        });
+                    }
+
+                    // 通常のステータスアクセス
+                    return (prop in target ? target[prop] : 0);
+                },
+
+                has: (target, prop) => {
+                    // 'data' は存在する
+                    if (prop === 'data') return true;
+
+                    // 実際にデータがあれば true
                     if (prop in target) return true;
-                    if (typeof prop === 'string' && (prop in Math || prop === 'toJSON')) return false;
+
+                    // Math.js の標準関数 (max, min, sin, cos...) や内部プロパティは
+                    // 「持っていない」と答えて、Math.js 側の標準機能を使わせる
+                    if (typeof prop === 'string' && (prop in Math || prop === 'toJSON' || prop === 'end')) {
+                        return false;
+                    }
+
+                    // それ以外の未知の変数は「あるよ（値は0だけど）」と答えてエラーを防ぐ
                     return true;
                 }
             });
-
-            // We also provide 'data' for the accessor syntax used for custom Japanese vars
-            const scope = {
-                ...scopeProxy,
-                data: scopeProxy
-            };
 
             // Evaluate
             const result = math.evaluate(normalizedFormula, scope);
