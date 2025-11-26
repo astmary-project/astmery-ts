@@ -28,8 +28,8 @@ export class CharacterCalculator {
     private static readonly DEFAULT_FORMULAS: Record<string, string> = {
         'HP': '(Grade + Body) * 5',
         'MP': '(Grade + Spirit) * 5',
-        'Defense': 'Body * 2',
-        'MagicDefense': 'Spirit * 2',
+        'Defense': 'Body',
+        'MagicDefense': 'Spirit',
         'ActionSpeed': 'Grade + 3',
     };
 
