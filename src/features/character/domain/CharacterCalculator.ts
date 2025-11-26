@@ -323,20 +323,45 @@ export class CharacterCalculator {
                 get: (target, prop: string) => {
                     if (prop === 'Symbol(Symbol.iterator)') return undefined;
                     if (prop in target) return target[prop];
-                    // If it's a mathjs keyword/function, let it pass through (return undefined so mathjs handles it)
-                    // But we don't know all mathjs keywords easily.
-                    // If we return 0 for everything, we break functions like 'max', 'min'.
-                    // So we should only return 0 for variables we expect?
-                    // Or we can just let it throw if it's a function name?
-                    // Actually, mathjs `evaluate` with scope: if variable is not in scope, it looks up in math functions.
-                    // If not found, it throws.
-                    // We want "missing stat = 0".
-                    // But we can't easily intercept "NonExistent" unless we parse.
-                    // For now, let's just return scope as is. If it fails, it fails.
-                    return undefined;
+
+                    // If it's a mathjs keyword or function, return undefined so mathjs handles it
+                    // We check against Math object and common mathjs keywords
+                    if (typeof prop === 'string') {
+                        if (prop in Math || prop === 'length' || prop === 'toJSON') return undefined;
+                        // Common mathjs functions that might not be in Math
+                        const mathJsKeywords = [
+                            'max', 'min', 'sum', 'mean', 'std', 'var',
+                            'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
+                            'sqrt', 'log', 'exp', 'pow', 'abs',
+                            'ceil', 'floor', 'round', 'fix',
+                            'random', 'randomInt',
+                            'end', 'to', 'in', 'mod', 'and', 'or', 'xor', 'not', 'true', 'false', 'null'
+                        ];
+                        if (mathJsKeywords.includes(prop)) return undefined;
+                    }
+
+                    // Otherwise, treat as missing stat = 0
+                    return 0;
                 },
                 has: (target, prop: string) => {
-                    return true; // Claim we have everything? No, that breaks functions.
+                    if (prop in target) return true;
+
+                    // If it's a mathjs keyword, return false so mathjs looks it up
+                    if (typeof prop === 'string') {
+                        if (prop in Math || prop === 'length' || prop === 'toJSON') return false;
+                        const mathJsKeywords = [
+                            'max', 'min', 'sum', 'mean', 'std', 'var',
+                            'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
+                            'sqrt', 'log', 'exp', 'pow', 'abs',
+                            'ceil', 'floor', 'round', 'fix',
+                            'random', 'randomInt',
+                            'end', 'to', 'in', 'mod', 'and', 'or', 'xor', 'not', 'true', 'false', 'null'
+                        ];
+                        if (mathJsKeywords.includes(prop)) return false;
+                    }
+
+                    // Otherwise, claim we have it (as 0)
+                    return true;
                 }
             });
 
