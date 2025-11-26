@@ -33,6 +33,15 @@ export const STANDARD_STAT_ORDER = [
     'MagicDefense'
 ];
 
+export const ABILITY_STATS = [
+    'Body',
+    'Spirit',
+    'Combat',
+    'Science',
+    'Magic',
+    'MagicKnowledge',
+];
+
 export const JAPANESE_TO_ENGLISH_STATS: Record<string, string> = Object.entries(STAT_LABELS).reduce((acc, [key, value]) => {
     acc[value] = key;
     return acc;

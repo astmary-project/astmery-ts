@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { JAPANESE_TO_ENGLISH_STATS, STANDARD_STAT_ORDER, STAT_LABELS } from '@/features/character/domain/constants';
+import { ABILITY_STATS, JAPANESE_TO_ENGLISH_STATS, STAT_LABELS } from '@/features/character/domain/constants';
 import { useCharacterSheet } from '@/features/character/hooks/useCharacterSheet';
 import { Plus, Trash2 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
@@ -89,7 +89,11 @@ export default function CharacterSetupPage() {
 
         // Prepare new logs
         const logsToAdd: any[] = [];
-        for (const key of STANDARD_STAT_ORDER) {
+
+        // Only process editable stats (Grade + Ability Stats)
+        const editableStats = ['Grade', ...ABILITY_STATS];
+
+        for (const key of editableStats) {
             const currentVal = state.stats[key] || 0;
             const targetVal = formData.stats[key] || 0;
             const diff = targetVal - currentVal;
@@ -241,11 +245,25 @@ export default function CharacterSetupPage() {
                             </div>
                         </div>
 
-                        {/* Stats */}
+                        {/* Grade */}
                         <div className="space-y-4">
-                            <h3 className="text-lg font-semibold">基礎ステータス</h3>
+                            <h3 className="text-lg font-semibold">グレード</h3>
+                            <div className="grid w-full max-w-xs items-center gap-1.5">
+                                <Label htmlFor="stat-Grade">{STAT_LABELS['Grade']}</Label>
+                                <Input
+                                    id="stat-Grade"
+                                    type="number"
+                                    value={formData.stats['Grade'] || 0}
+                                    onChange={e => handleStatChange('Grade', e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Ability Stats */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold">能力値</h3>
                             <div className="grid grid-cols-2 gap-4">
-                                {STANDARD_STAT_ORDER.map(key => (
+                                {ABILITY_STATS.map(key => (
                                     <div key={key} className="grid w-full items-center gap-1.5">
                                         <Label htmlFor={`stat-${key}`}>{STAT_LABELS[key] || key}</Label>
                                         <Input
