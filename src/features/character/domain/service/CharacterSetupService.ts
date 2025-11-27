@@ -11,6 +11,7 @@ export interface SkillInput {
     id: string;
     name: string;
     type: string;
+    acquisitionType?: 'Free' | 'Standard' | 'Grade'; // New: Acquisition Type
     summary: string; // New: Human readable description
     effect: string;  // DSL for parsing
     restriction: string; // New: Restriction text
@@ -154,6 +155,7 @@ export class CharacterSetupService {
                 id: s.id,
                 name: s.name,
                 type: s.type,
+                acquisitionType: s.acquisitionType,
                 description: s.summary, // Use summary for description
                 effect: s.effect,       // Store raw effect string
                 restriction: s.restriction,
@@ -229,6 +231,7 @@ export class CharacterSetupService {
                 // Check basic fields first
                 let isDiff = isStrDiff(initial.name, s.name) ||
                     isStrDiff(initial.type, s.type) ||
+                    isStrDiff(initial.acquisitionType, s.acquisitionType) ||
                     isStrDiff(initial.description, s.summary) ||
                     isEffectChanged ||
                     isStrDiff(initial.restriction, s.restriction) ||

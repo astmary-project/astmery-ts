@@ -398,6 +398,27 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
                                     <CardTitle>スキル一覧</CardTitle>
                                 </CardHeader>
                                 <CardContent>
+                                    {/* Skill Acquisition Summary */}
+                                    <div className="flex flex-wrap gap-4 mb-6 text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold text-foreground">Total:</span>
+                                            <span className="font-mono">{state.skills.length}</span>
+                                        </div>
+                                        <div className="w-px h-4 bg-border self-center hidden sm:block" />
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold text-foreground">無料 (Free):</span>
+                                            <span className="font-mono">{state.skills.filter(s => s.acquisitionType === 'Free').length}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold text-foreground">自由 (Standard):</span>
+                                            <span className="font-mono">{state.skills.filter(s => s.acquisitionType === 'Standard' || !s.acquisitionType).length}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold text-foreground">グレード (Grade):</span>
+                                            <span className="font-mono">{state.skills.filter(s => s.acquisitionType === 'Grade').length}</span>
+                                        </div>
+                                    </div>
+
                                     {/* Dynamically render skill sections based on types present */}
                                     {(() => {
                                         // Get all unique types and sort them (Standard types first)

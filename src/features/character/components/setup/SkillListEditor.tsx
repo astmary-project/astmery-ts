@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { SkillInput } from '@/features/character/domain/service/CharacterSetupService';
 import { ChevronDown, Plus, Settings2, Trash2 } from 'lucide-react';
@@ -25,6 +26,7 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
             id: crypto.randomUUID(),
             name: '',
             type: 'Passive',
+            acquisitionType: 'Standard', // Default
             summary: '', // New
             effect: '',
             restriction: '', // New
@@ -88,6 +90,19 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </div>
+                                <Select
+                                    value={skill.acquisitionType || 'Standard'}
+                                    onValueChange={(val) => handleSkillChange(index, 'acquisitionType', val)}
+                                >
+                                    <SelectTrigger className="w-[130px]">
+                                        <SelectValue placeholder="習得種別" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Free">無料習得</SelectItem>
+                                        <SelectItem value="Standard">自由習得</SelectItem>
+                                        <SelectItem value="Grade">グレード習得</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="flex gap-2">
                                 <Input
@@ -123,30 +138,37 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
                                                     <Label>タイミング</Label>
                                                     <Input value={skill.timing} onChange={e => handleSkillChange(index, 'timing', e.target.value)} />
                                                 </div>
+
                                                 <div className="grid gap-2">
                                                     <Label>制限</Label>
                                                     <Input value={skill.restriction} onChange={e => handleSkillChange(index, 'restriction', e.target.value)} />
                                                 </div>
+
                                                 <div className="grid gap-2">
                                                     <Label>魔術グレード</Label>
                                                     <Input value={skill.magicGrade} onChange={e => handleSkillChange(index, 'magicGrade', e.target.value)} />
                                                 </div>
+
                                                 <div className="grid gap-2">
                                                     <Label>CT (クールタイム)</Label>
                                                     <Input value={skill.cooldown} onChange={e => handleSkillChange(index, 'cooldown', e.target.value)} />
                                                 </div>
+
                                                 <div className="grid gap-2">
                                                     <Label>対象</Label>
                                                     <Input value={skill.target} onChange={e => handleSkillChange(index, 'target', e.target.value)} />
                                                 </div>
+
                                                 <div className="grid gap-2">
                                                     <Label>射程</Label>
                                                     <Input value={skill.range} onChange={e => handleSkillChange(index, 'range', e.target.value)} />
                                                 </div>
+
                                                 <div className="grid gap-2">
                                                     <Label>形状</Label>
                                                     <Input value={skill.shape} onChange={e => handleSkillChange(index, 'shape', e.target.value)} />
                                                 </div>
+
                                                 <div className="grid gap-2">
                                                     <Label>消費コスト</Label>
                                                     <Input
@@ -155,23 +177,29 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
                                                         placeholder="MP-5, 弾薬-1"
                                                     />
                                                 </div>
+
                                                 <div className="grid gap-2">
                                                     <Label>継続</Label>
                                                     <Input value={skill.duration} onChange={e => handleSkillChange(index, 'duration', e.target.value)} />
                                                 </div>
+
                                                 <div className="grid gap-2">
                                                     <Label>能動判定</Label>
                                                     <Input value={skill.activeCheck} onChange={e => handleSkillChange(index, 'activeCheck', e.target.value)} />
                                                 </div>
+
                                                 <div className="grid gap-2">
                                                     <Label>受動判定</Label>
                                                     <Input value={skill.passiveCheck} onChange={e => handleSkillChange(index, 'passiveCheck', e.target.value)} />
                                                 </div>
+
                                                 <div className="grid gap-2">
                                                     <Label>判定補正 (Roll Modifier)</Label>
                                                     <Input value={skill.rollModifier} onChange={e => handleSkillChange(index, 'rollModifier', e.target.value)} placeholder="2, -1" />
                                                 </div>
+
                                             </div>
+
                                             <div className="grid gap-2">
                                                 <Label>チャットパレット (任意)</Label>
                                                 <Textarea
@@ -181,7 +209,9 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
                                                     rows={4}
                                                 />
                                             </div>
+
                                         </div>
+
                                     </DialogContent>
                                 </Dialog>
                             </div>

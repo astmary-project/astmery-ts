@@ -51,6 +51,7 @@ export interface Skill {
     id: string;
     name: string;
     type: string; // 'Active' | 'Passive' | 'Spell' | 'Other' | Custom
+    acquisitionType?: 'Free' | 'Standard' | 'Grade'; // New: Acquisition Type
     description: string;
     // Mechanics
     timing?: string;
