@@ -15,10 +15,14 @@ export class EffectParser {
         const grantedStats: { key: string; label: string; value: number; isMain?: boolean }[] = [];
         const grantedResources: Resource[] = [];
 
-        // Split by comma or space, but respect parentheses?
-        // Simple split might break "GrantStat:foo(bar)=1" if we split by space and there are spaces inside?
-        // Let's stick to simple split for now, assuming no spaces in labels or using specific delimiters.
-        const parts = effect.split(/[,、\s]+/);
+        // Split by comma or space, but respect parentheses and braces.
+        // We use a regex to match tokens instead of splitting.
+        // Matches:
+        // 1. {...} (content inside braces, assuming no nested braces for now)
+        // 2. (...) (content inside parens)
+        // 3. Any char that is NOT a separator (comma, Japanese comma, space)
+        const regex = /(?:\{[^{}]*\}|\([^()]*\)|[^,、\s])+/g;
+        const parts = effect.match(regex) || [];
         for (const part of parts) {
             if (!part.trim()) continue;
 
@@ -40,17 +44,43 @@ export class EffectParser {
                 continue;
             }
 
-            // 2. GrantResource:Name=Max
-            // e.g. GrantResource:弾薬=10
-            const grantResourceMatch = part.match(/^GrantResource:(.+?)=(\d+)$/i);
+            // 2. GrantResource:Name{max:10,min:0,init:10} OR GrantResource:Name=Max
+            // e.g. GrantResource:弾薬{max:10,init:10}
+            // e.g. GrantResource:弾薬=10 (Legacy support: Max=10, Init=10, Min=0)
+            const grantResourceMatch = part.match(/^GrantResource:(.+?)(?:=(.+)|{(.+)})?$/i);
             if (grantResourceMatch) {
                 const name = grantResourceMatch[1];
-                const max = parseInt(grantResourceMatch[2]);
+                const simpleValue = grantResourceMatch[2];
+                const complexValue = grantResourceMatch[3];
+
+                let max = 0;
+                let min = 0;
+                let initial = 0;
+
+                if (complexValue) {
+                    // Parse key:value pairs inside {}
+                    // e.g. max:10,min:0,init:10
+                    const props = complexValue.split(',').reduce((acc, pair) => {
+                        const [k, v] = pair.split(/[:=]/).map(s => s.trim().toLowerCase());
+                        if (k && v) acc[k] = parseInt(v) || 0;
+                        return acc;
+                    }, {} as Record<string, number>);
+
+                    max = props['max'] || 0;
+                    min = props['min'] || 0;
+                    initial = props['init'] !== undefined ? props['init'] : max; // Default init to max if not specified
+                } else if (simpleValue) {
+                    // Legacy: =10
+                    max = parseInt(simpleValue) || 0;
+                    initial = max;
+                }
+
                 grantedResources.push({
                     id: crypto.randomUUID(), // Generate ID for new resource
                     name: name,
                     max: max,
-                    initial: max
+                    min: min,
+                    initial: initial,
                 });
                 continue;
             }
@@ -75,11 +105,12 @@ export class EffectParser {
                 const formula = dynamicMatch[2].trim();
                 const statKey = JAPANESE_TO_ENGLISH_STATS[rawStat] || rawStat;
                 if (statKey) {
-                    let processedFormula = formula;
-                    for (const [jp, en] of Object.entries(JAPANESE_TO_ENGLISH_STATS)) {
-                        processedFormula = processedFormula.replaceAll(jp, en);
-                    }
-                    dynamicModifiers[statKey] = processedFormula;
+                    // We no longer manually replace Japanese keys here.
+                    // The formula should use {Variable} syntax, and CharacterCalculator.evaluateFormula will handle it.
+                    // However, for backward compatibility or ease of use, we might want to support legacy "Attack" without {}?
+                    // But the user agreed to standardize on {}.
+                    // So we just pass the formula as is.
+                    dynamicModifiers[statKey] = formula;
                 }
             }
         }

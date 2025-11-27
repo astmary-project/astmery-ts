@@ -136,6 +136,7 @@ export class CharacterLogFactory {
                 id: crypto.randomUUID(),
                 name,
                 max,
+                min: 0, // Default min
                 initial,
             },
             description: `Registered resource: ${name}`,

@@ -26,11 +26,12 @@ export class CharacterCalculator {
      * Aggregates a list of logs into a final CharacterState.
      */
     private static readonly DEFAULT_FORMULAS: Record<string, string> = {
-        'HP': '(Grade + Body) * 5',
-        'MP': '(Grade + Spirit) * 5',
-        'Defense': 'Body',
-        'MagicDefense': 'Spirit',
-        'ActionSpeed': 'Grade + 3',
+        'HP': '({Grade} + {Body}) * 5',
+        'MP': '({Grade} + {Spirit}) * 5',
+        'Defense': '{Body}',
+        'MagicDefense': '{Spirit}',
+        'ActionSpeed': '{Grade} + 3',
+        'DamageDice': 'ceil({Grade} / 5)', // New: Damage Dice Count
     };
 
     /**
@@ -272,104 +273,42 @@ export class CharacterCalculator {
     /**
      * Evaluates a formula string against the character state.
      */
+    /**
+     * Evaluates a formula string against the character state.
+     * Supports {Variable} syntax for stats.
+     */
     public static evaluateFormula(formula: string, state: CharacterState): number {
         try {
-            // 1. Prepare Scope and Replacements
+            // 1. Prepare Scope
             const scope: Record<string, number> = {};
-            const replacements: Record<string, string> = { ...JAPANESE_TO_ENGLISH_STATS };
 
-            // Add all stats to scope, handling Japanese keys
-            let varCounter = 0;
+            // Add all stats to scope (English keys)
             for (const [key, value] of Object.entries(state.stats)) {
-                // If it's a standard stat, it's already in JAPANESE_TO_ENGLISH_STATS (as target)
-                // But we need to ensure the English key is in scope.
-                if (/^[a-zA-Z0-9_]+$/.test(key)) {
-                    scope[key] = value;
-                } else {
-                    // Non-ASCII key (Custom Japanese Stat)
-                    // We need to map it to a safe variable name
-                    const safeVar = `__VAR_${varCounter++}__`;
-                    replacements[key] = safeVar;
-                    scope[safeVar] = value;
-                }
+                scope[key] = value;
             }
-
-            // Also add Derived Stats to scope
             for (const [key, value] of Object.entries(state.derivedStats)) {
-                if (/^[a-zA-Z0-9_]+$/.test(key)) {
-                    scope[key] = value;
-                } else {
-                    const safeVar = `__VAR_${varCounter++}__`;
-                    replacements[key] = safeVar;
-                    scope[safeVar] = value;
+                scope[key] = value;
+            }
+
+            // 2. Process Formula: Replace {Key} with value
+            // We look for {Key} patterns.
+            // Key can be English or Japanese.
+            let processedFormula = formula.replace(/\{(.+?)\}/g, (match, key) => {
+                const trimmedKey = key.trim();
+                // Try to resolve key
+                // 1. Check if it's a known Japanese key -> convert to English
+                const enKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
+
+                // 2. Check if it exists in scope
+                if (enKey in scope) {
+                    return scope[enKey].toString();
                 }
-            }
 
-            // 2. Pre-process Formula
-            let processedFormula = formula;
-            const sortedKeys = Object.keys(replacements).sort((a, b) => b.length - a.length);
-
-            for (const key of sortedKeys) {
-                processedFormula = processedFormula.replaceAll(key, replacements[key]);
-            }
-
-            // 2.5. Handle remaining non-ASCII symbols (Undefined custom stats)
-            // If the formula still contains non-ASCII characters, they are likely undefined custom stats.
-            // We map them to new variables initialized to 0.
-            processedFormula = processedFormula.replace(/([^\x00-\x7F]+)/g, (match) => {
-                // Check if we already mapped this unknown var (in case it appears multiple times)
-                if (replacements[match]) return replacements[match];
-
-                const safeVar = `__VAR_${varCounter++}__`;
-                replacements[match] = safeVar;
-                scope[safeVar] = 0; // Default to 0
-                return safeVar;
+                // 3. If not found, return 0 (safe default)
+                return '0';
             });
 
-            // 3. Extract symbols and fill missing ones with 0
-            // This avoids "Undefined symbol" errors from mathjs
-            try {
-                const node = math.parse(processedFormula);
-                // @ts-ignore - mathjs types might be tricky with filter
-                const symbols = node.filter((n: any) => n.isSymbolNode);
-
-                // @ts-ignore
-                symbols.forEach((symbol: any) => {
-                    const name = symbol.name;
-                    // Skip mathjs keywords/functions if they happen to be symbols (though usually they are FunctionNodes)
-                    // But if a user writes "sin", it might be parsed as a symbol if not invoked?
-                    // mathjs handles functions separately.
-
-                    // If not in scope, set to 0
-                    if (!(name in scope)) {
-                        // Check if it's a known math constant/function before overwriting
-                        // But mathjs usually resolves functions before symbols.
-                        // If we set scope['sin'] = 0, it might break 'sin(90)'.
-                        // So we should only set if it's NOT a known mathjs symbol.
-                        // However, checking all mathjs symbols is hard.
-                        // A simple heuristic: if it's in Math or we know it, skip.
-                        if (name in Math) return;
-
-                        // Also check common mathjs functions
-                        const mathJsKeywords = [
-                            'max', 'min', 'sum', 'mean', 'std', 'var',
-                            'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
-                            'sqrt', 'log', 'exp', 'pow', 'abs',
-                            'ceil', 'floor', 'round', 'fix',
-                            'random', 'randomInt',
-                            'end', 'to', 'in', 'mod', 'and', 'or', 'xor', 'not', 'true', 'false', 'null'
-                        ];
-                        if (mathJsKeywords.includes(name)) return;
-
-                        scope[name] = 0;
-                    }
-                });
-            } catch (parseError) {
-                console.warn(`Failed to parse formula for symbol extraction: ${processedFormula}`, parseError);
-                // Fallback: proceed without pre-filling, might throw Undefined symbol
-            }
-
-            // 4. Evaluate
+            // 3. Evaluate
             return math.evaluate(processedFormula, scope);
         } catch (e) {
             console.error(`Formula evaluation error: ${formula}`, e);

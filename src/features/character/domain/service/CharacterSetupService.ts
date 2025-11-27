@@ -19,7 +19,7 @@ export interface SkillInput {
     target: string;
     range: string;
     cost: string;
-    roll: string;
+    rollModifier: string; // Changed from roll
     magicGrade: string;
     shape: string;
     duration: string;
@@ -57,6 +57,7 @@ export interface SetupServiceInput {
     currentCustomLabels: Record<string, string>;
     currentCustomMainStats: string[];
     currentResources: Resource[];
+    currentSpecialtyElements: SpecialtyElementInput[]; // Added
 
     newStats: Record<string, number>;
     newSpecialtyElements: SpecialtyElementInput[];
@@ -94,8 +95,18 @@ export class CharacterSetupService {
         }
 
         // 2. Specialty Elements Benefits
+        const currentElementSet = new Set(
+            input.currentSpecialtyElements.map(e => `${e.name}:${e.benefit}`)
+        );
+
         for (const el of newSpecialtyElements) {
             if (!el.benefit) continue;
+
+            // Check if this element+benefit combination already exists
+            if (currentElementSet.has(`${el.name}:${el.benefit}`)) {
+                continue;
+            }
+
             const match = el.benefit.match(/^(.+?)\s*([+\-])\s*(\d+)$/);
             if (match) {
                 const rawStat = match[1].trim();
@@ -116,6 +127,9 @@ export class CharacterSetupService {
                 }
             }
         }
+
+        // Helper to compare optional strings
+        const isStrDiff = (a?: string, b?: string) => (a || '') !== (b || '');
 
         // 3. Skills Diff
         const initialSkillIds = new Set(currentSkills.map(s => s.id));
@@ -149,11 +163,11 @@ export class CharacterSetupService {
                 grantedResources: grantedResources.length > 0 ? grantedResources : undefined,
                 timing: s.timing,
                 cooldown: s.cooldown,
-                target: s.target,
-                range: s.range,
-                cost: s.cost,
-                roll: s.roll,
-                magicGrade: s.magicGrade,
+                target: s.target || undefined,
+                range: s.range || undefined,
+                cost: s.cost || undefined,
+                rollModifier: s.rollModifier || undefined,
+                magicGrade: s.magicGrade || undefined,
                 shape: s.shape,
                 duration: s.duration,
                 activeCheck: s.activeCheck,
@@ -172,32 +186,92 @@ export class CharacterSetupService {
                 });
             } else {
                 // Modified?
-                const initialModifiers = initial.statModifiers || {};
-                const initialDynamic = initial.dynamicModifiers || {};
-                const initialGrantedStats = initial.grantedStats || [];
-                const initialGrantedResources = initial.grantedResources || [];
+                // Modified?
+                const isEffectChanged = isStrDiff(initial.effect, s.effect);
 
-                const isDiff = initial.name !== s.name ||
-                    initial.type !== s.type ||
-                    initial.description !== s.summary ||
-                    initial.effect !== s.effect ||
-                    initial.restriction !== s.restriction ||
-                    initial.timing !== s.timing ||
-                    initial.cooldown !== s.cooldown ||
-                    initial.target !== s.target ||
-                    initial.range !== s.range ||
-                    initial.cost !== s.cost ||
-                    initial.roll !== s.roll ||
-                    initial.magicGrade !== s.magicGrade ||
-                    initial.shape !== s.shape ||
-                    initial.duration !== s.duration ||
-                    initial.activeCheck !== s.activeCheck ||
-                    initial.passiveCheck !== s.passiveCheck ||
-                    initial.chatPalette !== s.chatPalette ||
-                    JSON.stringify(initialModifiers) !== JSON.stringify(statModifiers) ||
-                    JSON.stringify(initialDynamic) !== JSON.stringify(dynamicModifiers) ||
-                    JSON.stringify(initialGrantedStats) !== JSON.stringify(grantedStats) ||
-                    JSON.stringify(initialGrantedResources.map(r => ({ ...r, id: '' }))) !== JSON.stringify(grantedResources.map(r => ({ ...r, id: '' })));
+                // Helper to canonicalize objects for comparison
+                // Handles key sorting, undefined vs empty object/array, and specific defaults
+                const canonicalize = (obj: any): string => {
+                    if (obj === undefined || obj === null) return '';
+                    if (Array.isArray(obj)) {
+                        if (obj.length === 0) return '';
+                        // For resources, strip IDs and ensure min exists
+                        return JSON.stringify(obj.map(item => {
+                            if (typeof item === 'object' && item !== null) {
+                                const clone = { ...item };
+                                if ('id' in clone) clone.id = '';
+                                if ('min' in clone && clone.min === undefined) clone.min = 0;
+                                // Sort keys
+                                return Object.keys(clone).sort().reduce((acc, key) => {
+                                    acc[key] = clone[key];
+                                    return acc;
+                                }, {} as any);
+                            }
+                            return item;
+                        }));
+                    }
+                    if (typeof obj === 'object') {
+                        if (Object.keys(obj).length === 0) return '';
+                        // Sort keys
+                        return JSON.stringify(Object.keys(obj).sort().reduce((acc, key) => {
+                            acc[key] = obj[key];
+                            return acc;
+                        }, {} as any));
+                    }
+                    return JSON.stringify(obj);
+                };
+
+                const initialModifiers = initial.statModifiers;
+                const initialDynamic = initial.dynamicModifiers;
+                const initialGrantedStats = initial.grantedStats;
+                const initialGrantedResources = initial.grantedResources;
+
+                // Check basic fields first
+                let isDiff = isStrDiff(initial.name, s.name) ||
+                    isStrDiff(initial.type, s.type) ||
+                    isStrDiff(initial.description, s.summary) ||
+                    isEffectChanged ||
+                    isStrDiff(initial.restriction, s.restriction) ||
+                    isStrDiff(initial.timing, s.timing) ||
+                    isStrDiff(initial.cooldown, s.cooldown) ||
+                    isStrDiff(initial.target, s.target) ||
+                    isStrDiff(initial.range, s.range) ||
+                    isStrDiff(initial.cost, s.cost) ||
+                    isStrDiff(initial.rollModifier, s.rollModifier) ||
+                    isStrDiff(initial.magicGrade, s.magicGrade) ||
+                    isStrDiff(initial.shape, s.shape) ||
+                    isStrDiff(initial.duration, s.duration) ||
+                    isStrDiff(initial.activeCheck, s.activeCheck) ||
+                    isStrDiff(initial.passiveCheck, s.passiveCheck) ||
+                    isStrDiff(initial.chatPalette, s.chatPalette);
+
+                // Only check derived fields if basic fields matched AND effect string changed
+                // OR if we suspect derived fields might be out of sync (though we trust effect string as source of truth)
+                // Actually, if effect string matches, we should assume derived fields match to avoid "unnecessary" updates.
+                // But if the user manually edited the JSON, we might want to correct it?
+                // The user complaint is about "unnecessary" updates, so we prioritize stability.
+                if (!isDiff && isEffectChanged) {
+                    // This block is unreachable because isEffectChanged implies isDiff is true.
+                    // Logic correction: We check derived fields ONLY if we haven't found a diff yet?
+                    // No, if effect changed, we ARE diff.
+                    // The question is: if effect did NOT change, do we check derived fields?
+                    // If we don't, we solve the user's problem.
+                } else if (!isDiff && !isEffectChanged) {
+                    // Effect string is same. Check derived fields just in case, but use canonicalization.
+                    // If canonicalized forms differ, it's a diff.
+                    // But wait, if effect is same, why would derived differ?
+                    // 1. Parser logic changed.
+                    // 2. Initial data was manual/legacy.
+                    // If we want to avoid "every time" updates, we should be very lenient here.
+                    // If we assume effect string is source of truth, we can skip this.
+                    // BUT, if we skip this, we never migrate legacy data structure (like adding min:0).
+                    // So we SHOULD check, but with robust comparison.
+
+                    isDiff = canonicalize(initialModifiers) !== canonicalize(statModifiers) ||
+                        canonicalize(initialDynamic) !== canonicalize(dynamicModifiers) ||
+                        canonicalize(initialGrantedStats) !== canonicalize(grantedStats) ||
+                        canonicalize(initialGrantedResources) !== canonicalize(grantedResources);
+                }
 
                 if (isDiff) {
                     logsToAdd.push({
@@ -258,19 +332,60 @@ export class CharacterSetupService {
                 });
             } else {
                 // Modified?
-                const initialModifiers = initial.statModifiers || {};
-                const initialDynamic = initial.dynamicModifiers || {};
-                const initialGrantedStats = initial.grantedStats || [];
-                const initialGrantedResources = initial.grantedResources || [];
+                const isEffectChanged = isStrDiff(initial.effect, i.effect);
 
-                const isDiff = initial.name !== i.name ||
-                    initial.type !== i.type ||
-                    initial.description !== i.summary ||
-                    initial.effect !== i.effect ||
-                    JSON.stringify(initialModifiers) !== JSON.stringify(statModifiers) ||
-                    JSON.stringify(initialDynamic) !== JSON.stringify(dynamicModifiers) ||
-                    JSON.stringify(initialGrantedStats) !== JSON.stringify(grantedStats) ||
-                    JSON.stringify(initialGrantedResources.map(r => ({ ...r, id: '' }))) !== JSON.stringify(grantedResources.map(r => ({ ...r, id: '' })));
+                // Reuse canonicalize helper (need to hoist it or duplicate)
+                // Duplicating for now since it's inside the loop scope in previous block... wait, I should hoist it.
+                // But I can't easily hoist with replace_file_content without replacing the whole file or method.
+                // I'll define it again or use a shared helper if I could refactor.
+                // For this edit, I'll just define it again inside the loop or use a slightly different approach.
+                // Actually, I can define it once at the top of calculateDiffLogs?
+                // But I'm editing a chunk.
+                // I'll just duplicate the logic for now to be safe with the tool.
+
+                const canonicalize = (obj: any): string => {
+                    if (obj === undefined || obj === null) return '';
+                    if (Array.isArray(obj)) {
+                        if (obj.length === 0) return '';
+                        return JSON.stringify(obj.map(item => {
+                            if (typeof item === 'object' && item !== null) {
+                                const clone = { ...item };
+                                if ('id' in clone) clone.id = '';
+                                if ('min' in clone && clone.min === undefined) clone.min = 0;
+                                return Object.keys(clone).sort().reduce((acc, key) => {
+                                    acc[key] = clone[key];
+                                    return acc;
+                                }, {} as any);
+                            }
+                            return item;
+                        }));
+                    }
+                    if (typeof obj === 'object') {
+                        if (Object.keys(obj).length === 0) return '';
+                        return JSON.stringify(Object.keys(obj).sort().reduce((acc, key) => {
+                            acc[key] = obj[key];
+                            return acc;
+                        }, {} as any));
+                    }
+                    return JSON.stringify(obj);
+                };
+
+                const initialModifiers = initial.statModifiers;
+                const initialDynamic = initial.dynamicModifiers;
+                const initialGrantedStats = initial.grantedStats;
+                const initialGrantedResources = initial.grantedResources;
+
+                let isDiff = isStrDiff(initial.name, i.name) ||
+                    isStrDiff(initial.type, i.type) ||
+                    isStrDiff(initial.description, i.summary) ||
+                    isEffectChanged;
+
+                if (!isDiff && !isEffectChanged) {
+                    isDiff = canonicalize(initialModifiers) !== canonicalize(statModifiers) ||
+                        canonicalize(initialDynamic) !== canonicalize(dynamicModifiers) ||
+                        canonicalize(initialGrantedStats) !== canonicalize(grantedStats) ||
+                        canonicalize(initialGrantedResources) !== canonicalize(grantedResources);
+                }
 
                 if (isDiff) {
                     logsToAdd.push({
@@ -337,6 +452,7 @@ export class CharacterSetupService {
                         id: r.id,
                         name: r.name,
                         max: parseInt(r.max) || 0,
+                        min: 0, // Default min for legacy resource input (though we are removing this input)
                         initial: parseInt(r.initial) || 0,
                     },
                 });

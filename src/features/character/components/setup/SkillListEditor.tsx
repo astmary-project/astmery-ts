@@ -28,7 +28,7 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
             summary: '', // New
             effect: '',
             restriction: '', // New
-            timing: '', cooldown: '', target: '', range: '', cost: '', roll: '',
+            timing: '', cooldown: '', target: '', range: '', cost: '', rollModifier: '',
             magicGrade: '', shape: '', duration: '', activeCheck: '', passiveCheck: '', chatPalette: ''
         }]);
     };
@@ -54,8 +54,19 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
                                 <div className="flex gap-1">
                                     <Input
                                         placeholder="種別"
-                                        value={skill.type}
-                                        onChange={e => handleSkillChange(index, 'type', e.target.value)}
+                                        value={
+                                            // Display Japanese for standard types, otherwise raw value
+                                            skill.type === 'Active' ? 'アクティブ' :
+                                                skill.type === 'Passive' ? 'パッシブ' :
+                                                    skill.type === 'Magic' ? '魔術' :
+                                                        skill.type
+                                        }
+                                        onChange={e => {
+                                            // If user types, it becomes a custom type (raw value)
+                                            // Note: If they type "アクティブ", it saves as "アクティブ", not "Active".
+                                            // This is acceptable as per user request for manual input.
+                                            handleSkillChange(index, 'type', e.target.value);
+                                        }}
                                         className="w-[120px]"
                                     />
                                     <DropdownMenu>
@@ -157,8 +168,8 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
                                                     <Input value={skill.passiveCheck} onChange={e => handleSkillChange(index, 'passiveCheck', e.target.value)} />
                                                 </div>
                                                 <div className="grid gap-2">
-                                                    <Label>判定式 (Roll)</Label>
-                                                    <Input value={skill.roll} onChange={e => handleSkillChange(index, 'roll', e.target.value)} placeholder="2d6 + 攻撃" />
+                                                    <Label>判定補正 (Roll Modifier)</Label>
+                                                    <Input value={skill.rollModifier} onChange={e => handleSkillChange(index, 'rollModifier', e.target.value)} placeholder="2, -1" />
                                                 </div>
                                             </div>
                                             <div className="grid gap-2">

@@ -1,37 +1,94 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { evaluate } from 'mathjs';
 import React, { useState } from 'react';
-import { CharacterLogEntry, CharacterState } from '../domain/CharacterLog';
-import { DiceRoller } from '../domain/DiceRoller';
+import { CharacterState } from '../domain/CharacterLog';
+import { DiceRoller, RollResult } from '../domain/DiceRoller';
 
 interface DicePanelProps {
     state: CharacterState;
-    onRoll: (log: CharacterLogEntry) => void;
+    resourceValues: Record<string, number>;
+    rollHistory: RollResult[];
+    onRoll: (result: RollResult) => void;
+    onResourceUpdate: (updates: { id: string; delta: number }[]) => void;
 }
 
-export function DicePanel({ state, onRoll }: DicePanelProps) {
+export function DicePanel({ state, resourceValues, rollHistory, onRoll, onResourceUpdate }: DicePanelProps) {
     const [formula, setFormula] = useState('');
 
     const handleRoll = () => {
         if (!formula) return;
 
-        const result = DiceRoller.roll(formula, state);
+        // Check for Resource Operation Syntax: :ResourceName operator Value
+        // e.g. :HP-5 or :HP-5;MP-3
+        if (formula.startsWith(':')) {
+            const operations = formula.slice(1).split(';');
+            const updates: { id: string; delta: number }[] = [];
 
-        const log: CharacterLogEntry = {
-            id: crypto.randomUUID(),
-            type: 'ROLL',
-            timestamp: Date.now(),
-            diceRoll: {
-                formula: formula,
-                result: result.total,
-                details: result.details,
-                isCritical: result.isCritical,
-                isFumble: result.isFumble,
+            operations.forEach(op => {
+                // Parse Name and Value
+                // Regex to capture Name, Operator (+/-), and Value (rest of string)
+                // We support + and - for now.
+                // Name can be anything until the operator.
+                const match = op.match(/^(.+?)([+\-])(.+)$/);
+                if (match) {
+                    const [, name, operator, valueExpr] = match;
+                    const resource = state.resources.find(r => r.name === name.trim());
+
+                    if (resource) {
+                        // Evaluate value expression (it might be a formula like {Damage})
+                        // We need to resolve variables in the value expression.
+                        // We can reuse DiceRoller's logic or just do simple replacement if we want to be safe.
+                        // For now, let's use a simplified evaluation that supports {Variable} syntax.
+
+                        let evalString = valueExpr.trim();
+                        // Replace {Variable} with values from stats or resources
+                        evalString = evalString.replace(/\{([^{}]*)\}/g, (_, key) => {
+                            const trimmedKey = key.trim();
+                            if (!trimmedKey) return '0';
+
+                            // Check resources first? Or stats?
+                            // Let's check stats first as usual.
+                            const statVal = state.stats[trimmedKey] ?? state.derivedStats[trimmedKey];
+                            if (statVal !== undefined) return statVal.toString();
+
+                            // Check resources
+                            const res = state.resources.find(r => r.name === trimmedKey);
+                            if (res) {
+                                return (resourceValues[res.id] ?? res.initial).toString();
+                            }
+
+                            return '0';
+                        });
+                        try {
+                            const value = evaluate(evalString);
+                            const delta = operator === '-' ? -value : value;
+                            updates.push({ id: resource.id, delta });
+                        } catch (e) {
+                            console.error('Failed to evaluate resource operation:', op, e);
+                        }
+                    }
+                }
+            });
+
+            if (updates.length > 0) {
+                onResourceUpdate(updates);
+                setFormula('');
             }
-        };
+            return;
+        }
 
-        onRoll(log);
+        // Normal Dice Roll
+        // We need to pass the current resource values to the roller
+        const tempState = { ...state };
+        state.resources.forEach(r => {
+            const val = resourceValues[r.id] ?? r.initial;
+            tempState.stats = { ...tempState.stats, [r.name]: val };
+        });
+
+        const result = DiceRoller.roll(formula, tempState);
+        onRoll(result);
         setFormula('');
     };
 
@@ -44,7 +101,7 @@ export function DicePanel({ state, onRoll }: DicePanelProps) {
     return (
         <Card className="h-full flex flex-col">
             <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Dice Roller</CardTitle>
+                <CardTitle className="text-sm font-medium">Dice Roller & Chat</CardTitle>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col gap-4 min-h-0">
                 <div className="flex gap-2">
@@ -52,38 +109,39 @@ export function DicePanel({ state, onRoll }: DicePanelProps) {
                         value={formula}
                         onChange={(e) => setFormula(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="e.g. 2d6 + Body"
+                        placeholder=":HP-5 or 2d6+{Atk}"
                         className="font-mono"
                     />
-                    <Button onClick={handleRoll}>Roll</Button>
+                    <Button onClick={handleRoll}>Send</Button>
                 </div>
 
                 <div className="flex-1 overflow-hidden relative">
                     <div className="absolute inset-0 overflow-y-auto pr-2">
                         <div className="space-y-2">
-                            {state.recentRolls.map((log) => (
-                                <div key={log.id} className="p-2 rounded bg-muted/50 text-sm">
+                            {rollHistory.map((result, index) => (
+                                <div key={index} className="p-2 rounded bg-muted/50 text-sm">
                                     <div className="flex justify-between items-center mb-1">
-                                        <span className="font-mono text-xs text-muted-foreground">{log.diceRoll?.formula}</span>
+                                        <span className="font-mono text-xs text-muted-foreground">{result.formula}</span>
                                         <span className="text-xs text-muted-foreground">
-                                            {new Date(log.timestamp).toLocaleTimeString()}
+                                            {/* Timestamp is not in RollResult, maybe add it? For now just show nothing or index */}
+                                            #{rollHistory.length - index}
                                         </span>
                                     </div>
                                     <div className="flex justify-between items-baseline">
                                         <span className="font-mono text-xs text-muted-foreground truncate max-w-[70%]">
-                                            {log.diceRoll?.details}
+                                            {result.details}
                                         </span>
                                         <div className="flex items-baseline gap-2">
-                                            {log.diceRoll?.isCritical && <span className="text-xs font-bold text-yellow-500">CRIT!</span>}
-                                            {log.diceRoll?.isFumble && <span className="text-xs font-bold text-red-500">FUMBLE!</span>}
-                                            <span className="font-bold text-lg">{log.diceRoll?.result}</span>
+                                            {result.isCritical && <span className="text-xs font-bold text-yellow-500">CRIT!</span>}
+                                            {result.isFumble && <span className="text-xs font-bold text-red-500">FUMBLE!</span>}
+                                            <span className="font-bold text-lg">{result.total}</span>
                                         </div>
                                     </div>
                                 </div>
                             ))}
-                            {state.recentRolls.length === 0 && (
+                            {rollHistory.length === 0 && (
                                 <div className="text-center text-muted-foreground text-xs py-4">
-                                    No rolls yet
+                                    No logs yet
                                 </div>
                             )}
                         </div>

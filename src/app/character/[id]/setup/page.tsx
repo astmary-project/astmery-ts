@@ -5,14 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { CustomStatEditor } from '@/features/character/components/setup/CustomStatEditor';
 import { EquipmentListEditor } from '@/features/character/components/setup/EquipmentListEditor';
-import { ResourceEditor } from '@/features/character/components/setup/ResourceEditor';
 import { SkillListEditor } from '@/features/character/components/setup/SkillListEditor';
 import { SpecialtyElementEditor } from '@/features/character/components/setup/SpecialtyElementEditor';
 import { Item, Skill } from '@/features/character/domain/CharacterLog';
 import { ABILITY_STATS, STAT_LABELS } from '@/features/character/domain/constants';
-import { CharacterSetupService, CustomStatInput, ItemInput, ResourceInput, SkillInput, SpecialtyElementInput } from '@/features/character/domain/service/CharacterSetupService';
+import { CharacterSetupService, ItemInput, SkillInput, SpecialtyElementInput } from '@/features/character/domain/service/CharacterSetupService';
 import { useCharacterSheet } from '@/features/character/hooks/useCharacterSheet';
 import { ChevronDown } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
@@ -33,8 +31,6 @@ export default function CharacterSetupPage() {
     const [specialtyElements, setSpecialtyElements] = useState<SpecialtyElementInput[]>([]);
     const [skills, setSkills] = useState<SkillInput[]>([]);
     const [equipment, setEquipment] = useState<ItemInput[]>([]);
-    const [customStats, setCustomStats] = useState<CustomStatInput[]>([]);
-    const [resources, setResources] = useState<ResourceInput[]>([]);
 
     const [isInitialized, setIsInitialized] = useState(false);
     const initialSkillsRef = useRef<Skill[]>([]);
@@ -69,14 +65,14 @@ export default function CharacterSetupPage() {
                 name: s.name,
                 type: s.type,
                 summary: s.description,
-                effect: s.effect || s.description, // Fallback to description if effect is missing
+                effect: s.effect || '', // No fallback
                 restriction: s.restriction || '',
                 timing: s.timing || '',
                 cooldown: s.cooldown || '',
                 target: s.target || '',
                 range: s.range || '',
                 cost: s.cost || '',
-                roll: s.roll || '',
+                rollModifier: s.rollModifier || '',
                 magicGrade: s.magicGrade || '',
                 shape: s.shape || '',
                 duration: s.duration || '',
@@ -92,32 +88,12 @@ export default function CharacterSetupPage() {
                 name: i.name,
                 type: i.type as any,
                 summary: i.description,
-                effect: i.effect || i.description,
-            })));
-
-            // Load Custom Stats
-            const loadedCustomStats: CustomStatInput[] = [];
-            for (const [key, label] of Object.entries(state.customLabels)) {
-                loadedCustomStats.push({
-                    key,
-                    label,
-                    value: (state.stats[key] || 0).toString(),
-                    isMain: state.customMainStats.includes(key),
-                });
-            }
-            setCustomStats(loadedCustomStats);
-
-            // Load Resources
-            setResources(state.resources.map(r => ({
-                id: r.id,
-                name: r.name,
-                max: r.max.toString(),
-                initial: r.initial.toString(),
+                effect: i.effect || '',
             })));
 
             setIsInitialized(true);
         }
-    }, [isLoading, isInitialized, name, character, state.stats, state.skills, state.equipment, state.customLabels, state.customMainStats, state.resources]);
+    }, [isLoading, isInitialized, name, character, state.stats, state.skills, state.equipment]);
 
     const handleStatChange = (key: string, value: string) => {
         const numValue = parseInt(value) || 0;
@@ -140,12 +116,19 @@ export default function CharacterSetupPage() {
             currentCustomLabels: state.customLabels,
             currentCustomMainStats: state.customMainStats,
             currentResources: state.resources,
+            currentSpecialtyElements: (character?.specialtyElements || []).map(el => {
+                const match = el.match(/^(.+)\((.+)\)$/);
+                if (match) {
+                    return { name: match[1], benefit: match[2] };
+                }
+                return { name: el, benefit: '' };
+            }),
             newStats: formData.stats,
             newSpecialtyElements: specialtyElements,
             newSkills: skills,
             newEquipment: equipment,
-            newCustomStats: customStats,
-            newResources: resources,
+            newCustomStats: [], // Removed
+            newResources: [], // Removed
         });
 
         const finalLogs = [...logs, ...logsToAdd];
@@ -245,12 +228,6 @@ export default function CharacterSetupPage() {
                             </div>
                         </div>
 
-                        {/* Custom Stats */}
-                        <CustomStatEditor stats={customStats} onChange={setCustomStats} />
-
-                        {/* Resources */}
-                        <ResourceEditor resources={resources} onChange={setResources} />
-
                         {/* Usage Guide */}
                         <details className="group border rounded-md bg-muted/20">
                             <summary className="cursor-pointer p-3 font-medium hover:bg-muted/50 transition-colors list-none flex items-center justify-between text-sm">
@@ -281,17 +258,16 @@ export default function CharacterSetupPage() {
                                     <div>
                                         <span className="font-semibold text-foreground">リソースの追加</span>
                                         <p className="text-xs">HP/MPのような消費ゲージを作成します。</p>
-                                        <code className="text-xs bg-muted px-1 py-0.5 rounded block mt-1 w-fit">GrantResource:弾薬=10</code>
+                                        <code className="text-xs bg-muted px-1 py-0.5 rounded block mt-1 w-fit">GrantResource:弾薬{'{'}max:10,min:0,init:10{'}'}</code>
                                     </div>
                                     <div className="text-xs border-t pt-2 mt-1">
                                         ※ 複数の効果を書く場合はスペースで区切ってください。<br />
-                                        例: <code className="bg-muted px-1 rounded">攻撃+1 GrantStat:カルマ=0</code>
+                                        例: <code className="bg-muted px-1 rounded">攻撃+1 GrantResource:弾薬{'{'}max:10{'}'}</code>
                                     </div>
                                 </div>
                             </div>
                         </details>
 
-                        {/* Skills */}
                         <SkillListEditor skills={skills} onChange={setSkills} />
 
                         {/* Equipment */}

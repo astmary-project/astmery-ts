@@ -2,11 +2,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import { Dices } from 'lucide-react';
 import { CharacterLogEntry, CharacterState } from '../domain/CharacterLog';
-import { STANDARD_STAT_ORDER, STAT_LABELS } from '../domain/constants';
-import { DiceRoller } from '../domain/DiceRoller';
+import { STANDARD_CHECK_FORMULAS, STANDARD_STAT_ORDER, STAT_LABELS } from '../domain/constants';
+import { DiceRoller, RollResult } from '../domain/DiceRoller';
 import { CharacterHeader } from './CharacterHeader';
 import { DicePanel } from './DicePanel';
 import { LogEditor } from './LogEditor';
@@ -22,25 +23,66 @@ interface CharacterSheetProps {
     logs: CharacterLogEntry[];
     onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
     onNameChange?: (name: string) => void;
+    onDeleteLog: (logId: string) => void;
 }
-export const CharacterSheet = ({ name, character, state, logs, onAddLog, onNameChange }: CharacterSheetProps) => {
+export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDeleteLog, onNameChange }: CharacterSheetProps) => {
+    // Ephemeral State (Session Scope)
+    const [resourceValues, setResourceValues] = useState<Record<string, number>>({});
+    const [rollHistory, setRollHistory] = useState<RollResult[]>([]);
+
+    // Initialize resource values on load or when definitions change
+    useEffect(() => {
+        const initialValues: Record<string, number> = {};
+        state.resources.forEach(r => {
+            // Preserve current value if exists, otherwise set to initial
+            initialValues[r.id] = resourceValues[r.id] ?? r.initial;
+        });
+        setResourceValues(initialValues);
+    }, [state.resources]);
+
+    // Handle Resource Updates (Ephemeral)
+    const handleResourceUpdate = (updates: { id: string; delta: number }[]) => {
+        setResourceValues(prev => {
+            const next = { ...prev };
+            updates.forEach(({ id, delta }) => {
+                const resource = state.resources.find(r => r.id === id);
+                if (resource) {
+                    const current = next[id] ?? resource.initial;
+                    const newValue = Math.min(resource.max, Math.max(resource.min, current + delta));
+                    next[id] = newValue;
+                }
+            });
+            return next;
+        });
+    };
+
+    // Handle Rolls (Ephemeral)
+    const handleRoll = (result: RollResult) => {
+        setRollHistory(prev => [result, ...prev]);
+    };
+
     // Helper for quick rolls
     const performRoll = (formula: string, description?: string) => {
-        const result = DiceRoller.roll(formula, state);
-        const log: CharacterLogEntry = {
-            id: crypto.randomUUID(),
-            type: 'ROLL',
-            timestamp: Date.now(),
-            description: description,
-            diceRoll: {
-                formula: formula,
-                result: result.total,
-                details: result.details,
-                isCritical: result.isCritical,
-                isFumble: result.isFumble,
-            }
-        };
-        onAddLog(log);
+        // We need to pass the current resource values to the roller if we want to support resource variables in rolls?
+        // Currently DiceRoller uses state.stats.
+        // If we want to use {HP} in a roll, we need to merge resourceValues into state for the roll.
+
+        // Create a temporary state with current resource values mapped by Name
+        const tempState = { ...state };
+        // Map resource values to stats for formula evaluation
+        state.resources.forEach(r => {
+            const val = resourceValues[r.id] ?? r.initial;
+            tempState.stats = { ...tempState.stats, [r.name]: val };
+        });
+
+        const result = DiceRoller.roll(formula, tempState);
+
+        // Add description to result details if present
+        if (description) {
+            result.details += ` ${description}`;
+        }
+
+        handleRoll(result);
     };
 
     const renderStats = () => {
@@ -76,8 +118,8 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onNameC
                                     variant="ghost"
                                     size="icon"
                                     className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6"
-                                    onClick={() => performRoll(`2d6 + ${key}`, `${label} Check`)}
-                                    title={`Roll 2d6 + ${key}`}
+                                    onClick={() => performRoll(`2d6 + {${key}}`, `${label} Check`)}
+                                    title={`Roll 2d6 + {${key}}`}
                                 >
                                     <Dices className="h-4 w-4" />
                                 </Button>
@@ -166,22 +208,37 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onNameC
                             </div>
 
                             {/* Skill Mechanics Display */}
-                            {(skill.roll || skill.effect) && (
+                            {(skill.rollModifier || skill.effect || skill.activeCheck) && (
                                 <div className="mt-2 pt-2 border-t flex gap-4 text-xs font-mono text-foreground/80">
-                                    {skill.roll && (
+                                    {/* Active Check Roll Button */}
+                                    {skill.activeCheck && (
                                         <div className="flex items-center gap-1">
-                                            <span className="text-muted-foreground">Roll:</span>
-                                            {skill.roll}
+                                            <span className="text-muted-foreground">Check:</span>
+                                            {skill.activeCheck}
+                                            {skill.rollModifier && <span className="text-primary"> {skill.rollModifier}</span>}
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
                                                 className="h-5 w-5 ml-1"
-                                                onClick={() => performRoll(skill.roll!, `${skill.name} Check`)}
+                                                onClick={() => {
+                                                    // Resolve formula
+                                                    // 1. Check if activeCheck is a known standard formula
+                                                    const baseFormula = STANDARD_CHECK_FORMULAS[skill.activeCheck!] || skill.activeCheck!;
+                                                    // 2. Append modifier if present
+                                                    const fullFormula = skill.rollModifier
+                                                        ? `${baseFormula} + ${skill.rollModifier}`
+                                                        : baseFormula;
+
+                                                    performRoll(fullFormula, `${skill.name} (${skill.activeCheck})`);
+                                                }}
+                                                title="Roll Check"
                                             >
                                                 <Dices className="h-3 w-3" />
                                             </Button>
                                         </div>
                                     )}
+
+                                    {/* Effect Roll Button */}
                                     {skill.effect && (
                                         <div className="flex items-center gap-1">
                                             <span className="text-muted-foreground">Effect:</span>
@@ -191,6 +248,7 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onNameC
                                                 size="icon"
                                                 className="h-5 w-5 ml-1"
                                                 onClick={() => performRoll(skill.effect!, `${skill.name} Effect`)}
+                                                title="Roll Effect"
                                             >
                                                 <Dices className="h-3 w-3" />
                                             </Button>
@@ -275,7 +333,9 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onNameC
                                                 <div key={resource.id} className="p-3 border rounded-lg bg-card">
                                                     <div className="text-sm font-medium text-muted-foreground mb-1">{resource.name}</div>
                                                     <div className="flex items-end gap-2">
-                                                        <span className="text-2xl font-bold font-mono">{resource.initial}</span>
+                                                        <span className="text-2xl font-bold font-mono">
+                                                            {resourceValues[resource.id] ?? resource.initial}
+                                                        </span>
                                                         <span className="text-sm text-muted-foreground mb-1">/ {resource.max}</span>
                                                     </div>
                                                 </div>
@@ -368,7 +428,7 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onNameC
                                 <CardContent>
                                     <div className="space-y-2">
                                         {[...logs].reverse().map((log) => (
-                                            <div key={log.id} className="text-sm border-b pb-2 last:border-0">
+                                            <div key={log.id} className="text-sm border-b pb-2 last:border-0 group relative pr-8">
                                                 <div className="flex justify-between text-muted-foreground text-xs mb-1">
                                                     <span>{new Date(log.timestamp).toLocaleString()}</span>
                                                     <span className="font-mono">{log.type}</span>
@@ -382,6 +442,15 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onNameC
                                                     {log.type === 'ROLL' && `Rolled: ${log.diceRoll?.result} (${log.diceRoll?.formula})`}
                                                     {log.description && <span className="text-muted-foreground ml-2">- {log.description}</span>}
                                                 </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="absolute top-2 right-0 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                                                    onClick={() => onDeleteLog(log.id)}
+                                                    title="Delete Log"
+                                                >
+                                                    <Trash2 className="h-3 w-3" />
+                                                </Button>
                                             </div>
                                         ))}
                                     </div>
@@ -393,7 +462,13 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onNameC
 
                 {/* Right Column: Tools (4 cols) */}
                 <div className="lg:col-span-4 space-y-6">
-                    <DicePanel state={state} onRoll={onAddLog} />
+                    <DicePanel
+                        state={state}
+                        resourceValues={resourceValues}
+                        rollHistory={rollHistory}
+                        onRoll={handleRoll}
+                        onResourceUpdate={handleResourceUpdate}
+                    />
                 </div>
             </div>
         </div>

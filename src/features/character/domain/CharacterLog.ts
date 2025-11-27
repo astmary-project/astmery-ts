@@ -43,6 +43,7 @@ export interface Resource {
     id: string;
     name: string;
     max: number; // For now fixed number, could be formula later
+    min: number; // Added: Minimum value (default 0)
     initial: number;
 }
 
@@ -57,7 +58,7 @@ export interface Skill {
     target?: string;
     range?: string;
     cost?: string;
-    roll?: string;
+    rollModifier?: string; // Changed from roll
     effect?: string;
     restriction?: string; // New: Restriction text
     // Detailed Mechanics

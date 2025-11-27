@@ -110,6 +110,12 @@ export const useCharacterSheet = (characterId: string) => {
         await save(newName, newLogs, newProfile);
     };
 
+    const deleteLog = async (logId: string) => {
+        const newLogs = logs.filter(l => l.id !== logId);
+        setLogs(newLogs);
+        await save(name, newLogs, characterProfile);
+    };
+
     return {
         name,
         character: characterProfile,
@@ -119,6 +125,7 @@ export const useCharacterSheet = (characterId: string) => {
         error,
         updateName,
         addLog,
+        deleteLog,
         updateProfile,
         updateCharacter,
         reload: () => window.location.reload() // Temp
