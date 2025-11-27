@@ -27,6 +27,7 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
             type: 'Passive',
             summary: '', // New
             effect: '',
+            restriction: '', // New
             timing: '', cooldown: '', target: '', range: '', cost: '', roll: '',
             magicGrade: '', shape: '', duration: '', activeCheck: '', passiveCheck: '', chatPalette: ''
         }]);
@@ -112,16 +113,16 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
                                                     <Input value={skill.timing} onChange={e => handleSkillChange(index, 'timing', e.target.value)} />
                                                 </div>
                                                 <div className="grid gap-2">
+                                                    <Label>制限</Label>
+                                                    <Input value={skill.restriction} onChange={e => handleSkillChange(index, 'restriction', e.target.value)} />
+                                                </div>
+                                                <div className="grid gap-2">
                                                     <Label>魔術グレード</Label>
                                                     <Input value={skill.magicGrade} onChange={e => handleSkillChange(index, 'magicGrade', e.target.value)} />
                                                 </div>
                                                 <div className="grid gap-2">
                                                     <Label>CT (クールタイム)</Label>
                                                     <Input value={skill.cooldown} onChange={e => handleSkillChange(index, 'cooldown', e.target.value)} />
-                                                </div>
-                                                <div className="grid gap-2">
-                                                    <Label>消費コスト</Label>
-                                                    <Input value={skill.cost} onChange={e => handleSkillChange(index, 'cost', e.target.value)} />
                                                 </div>
                                                 <div className="grid gap-2">
                                                     <Label>対象</Label>
@@ -134,6 +135,10 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
                                                 <div className="grid gap-2">
                                                     <Label>形状</Label>
                                                     <Input value={skill.shape} onChange={e => handleSkillChange(index, 'shape', e.target.value)} />
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label>消費コスト</Label>
+                                                    <Input value={skill.cost} onChange={e => handleSkillChange(index, 'cost', e.target.value)} />
                                                 </div>
                                                 <div className="grid gap-2">
                                                     <Label>継続</Label>

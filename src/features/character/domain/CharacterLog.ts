@@ -59,6 +59,7 @@ export interface Skill {
     cost?: string;
     roll?: string;
     effect?: string;
+    restriction?: string; // New: Restriction text
     // Detailed Mechanics
     magicGrade?: string; // 魔術グレード
     shape?: string;      // 形状

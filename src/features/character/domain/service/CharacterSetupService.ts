@@ -13,6 +13,7 @@ export interface SkillInput {
     type: string;
     summary: string; // New: Human readable description
     effect: string;  // DSL for parsing
+    restriction: string; // New: Restriction text
     timing: string;
     cooldown: string;
     target: string;
@@ -141,6 +142,7 @@ export class CharacterSetupService {
                 type: s.type,
                 description: s.summary, // Use summary for description
                 effect: s.effect,       // Store raw effect string
+                restriction: s.restriction,
                 statModifiers: Object.keys(statModifiers).length > 0 ? statModifiers : undefined,
                 dynamicModifiers: Object.keys(dynamicModifiers).length > 0 ? dynamicModifiers : undefined,
                 grantedStats: grantedStats.length > 0 ? grantedStats : undefined,
@@ -179,6 +181,7 @@ export class CharacterSetupService {
                     initial.type !== s.type ||
                     initial.description !== s.summary ||
                     initial.effect !== s.effect ||
+                    initial.restriction !== s.restriction ||
                     initial.timing !== s.timing ||
                     initial.cooldown !== s.cooldown ||
                     initial.target !== s.target ||

@@ -70,6 +70,7 @@ export default function CharacterSetupPage() {
                 type: s.type,
                 summary: s.description,
                 effect: s.effect || s.description, // Fallback to description if effect is missing
+                restriction: s.restriction || '',
                 timing: s.timing || '',
                 cooldown: s.cooldown || '',
                 target: s.target || '',
