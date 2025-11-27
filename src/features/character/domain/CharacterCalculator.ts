@@ -307,71 +307,69 @@ export class CharacterCalculator {
 
             // 2. Pre-process Formula
             let processedFormula = formula;
-            // Sort keys by length descending to avoid partial matches (e.g. "魔力" vs "魔力供給")
             const sortedKeys = Object.keys(replacements).sort((a, b) => b.length - a.length);
 
             for (const key of sortedKeys) {
-                // We use a global replace. 
-                // Note: This is a simple string replace. It might replace inside strings or comments if we had them.
-                // But for simple math formulas, it should be fine.
                 processedFormula = processedFormula.replaceAll(key, replacements[key]);
             }
 
-            // 3. Evaluate
-            // Use a proxy to handle missing variables gracefully (treat as 0)
-            const proxyScope = new Proxy(scope, {
-                get: (target, prop: string) => {
-                    if (prop === 'Symbol(Symbol.iterator)') return undefined;
-                    if (prop in target) return target[prop];
+            // 2.5. Handle remaining non-ASCII symbols (Undefined custom stats)
+            // If the formula still contains non-ASCII characters, they are likely undefined custom stats.
+            // We map them to new variables initialized to 0.
+            processedFormula = processedFormula.replace(/([^\x00-\x7F]+)/g, (match) => {
+                // Check if we already mapped this unknown var (in case it appears multiple times)
+                if (replacements[match]) return replacements[match];
 
-                    // If it's a mathjs keyword or function, return undefined so mathjs handles it
-                    // We check against Math object and common mathjs keywords
-                    if (typeof prop === 'string') {
-                        if (prop in Math || prop === 'length' || prop === 'toJSON') return undefined;
-                        // Common mathjs functions that might not be in Math
-                        const mathJsKeywords = [
-                            'max', 'min', 'sum', 'mean', 'std', 'var',
-                            'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
-                            'sqrt', 'log', 'exp', 'pow', 'abs',
-                            'ceil', 'floor', 'round', 'fix',
-                            'random', 'randomInt',
-                            'end', 'to', 'in', 'mod', 'and', 'or', 'xor', 'not', 'true', 'false', 'null'
-                        ];
-                        if (mathJsKeywords.includes(prop)) return undefined;
-                    }
-
-                    // Otherwise, treat as missing stat = 0
-                    return 0;
-                },
-                has: (target, prop: string) => {
-                    if (prop in target) return true;
-
-                    // If it's a mathjs keyword, return false so mathjs looks it up
-                    if (typeof prop === 'string') {
-                        if (prop in Math || prop === 'length' || prop === 'toJSON') return false;
-                        const mathJsKeywords = [
-                            'max', 'min', 'sum', 'mean', 'std', 'var',
-                            'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
-                            'sqrt', 'log', 'exp', 'pow', 'abs',
-                            'ceil', 'floor', 'round', 'fix',
-                            'random', 'randomInt',
-                            'end', 'to', 'in', 'mod', 'and', 'or', 'xor', 'not', 'true', 'false', 'null'
-                        ];
-                        if (mathJsKeywords.includes(prop)) return false;
-                    }
-
-                    // Otherwise, claim we have it (as 0)
-                    return true;
-                }
+                const safeVar = `__VAR_${varCounter++}__`;
+                replacements[match] = safeVar;
+                scope[safeVar] = 0; // Default to 0
+                return safeVar;
             });
 
-            // To support "missing stat = 0", we would need to parse the formula and identify symbols.
-            // Given the complexity, let's stick to "Must define stat or use 0".
-            // But wait, previously I had a Proxy that returned 0.
-            // Let's restore that behavior but be careful about functions.
-            // Actually, if we use `math.evaluate(formula, scope)`, mathjs checks scope first.
-            // If we pass a plain object, it works standardly.
+            // 3. Extract symbols and fill missing ones with 0
+            // This avoids "Undefined symbol" errors from mathjs
+            try {
+                const node = math.parse(processedFormula);
+                // @ts-ignore - mathjs types might be tricky with filter
+                const symbols = node.filter((n: any) => n.isSymbolNode);
 
+                // @ts-ignore
+                symbols.forEach((symbol: any) => {
+                    const name = symbol.name;
+                    // Skip mathjs keywords/functions if they happen to be symbols (though usually they are FunctionNodes)
+                    // But if a user writes "sin", it might be parsed as a symbol if not invoked?
+                    // mathjs handles functions separately.
+
+                    // If not in scope, set to 0
+                    if (!(name in scope)) {
+                        // Check if it's a known math constant/function before overwriting
+                        // But mathjs usually resolves functions before symbols.
+                        // If we set scope['sin'] = 0, it might break 'sin(90)'.
+                        // So we should only set if it's NOT a known mathjs symbol.
+                        // However, checking all mathjs symbols is hard.
+                        // A simple heuristic: if it's in Math or we know it, skip.
+                        if (name in Math) return;
+
+                        // Also check common mathjs functions
+                        const mathJsKeywords = [
+                            'max', 'min', 'sum', 'mean', 'std', 'var',
+                            'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
+                            'sqrt', 'log', 'exp', 'pow', 'abs',
+                            'ceil', 'floor', 'round', 'fix',
+                            'random', 'randomInt',
+                            'end', 'to', 'in', 'mod', 'and', 'or', 'xor', 'not', 'true', 'false', 'null'
+                        ];
+                        if (mathJsKeywords.includes(name)) return;
+
+                        scope[name] = 0;
+                    }
+                });
+            } catch (parseError) {
+                console.warn(`Failed to parse formula for symbol extraction: ${processedFormula}`, parseError);
+                // Fallback: proceed without pre-filling, might throw Undefined symbol
+            }
+
+            // 4. Evaluate
             return math.evaluate(processedFormula, scope);
         } catch (e) {
             console.error(`Formula evaluation error: ${formula}`, e);
