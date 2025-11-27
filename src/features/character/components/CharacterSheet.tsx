@@ -1,12 +1,12 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Dices, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
-import { Dices } from 'lucide-react';
+import { CharacterCalculator } from '../domain/CharacterCalculator';
 import { CharacterLogEntry, CharacterState } from '../domain/CharacterLog';
-import { STANDARD_CHECK_FORMULAS, STANDARD_STAT_ORDER, STAT_LABELS } from '../domain/constants';
+import { JAPANESE_TO_ENGLISH_STATS, STANDARD_CHECK_FORMULAS, STANDARD_STAT_ORDER, STAT_LABELS } from '../domain/constants';
 import { DiceRoller, RollResult } from '../domain/DiceRoller';
 import { CharacterHeader } from './CharacterHeader';
 import { DicePanel } from './DicePanel';
@@ -56,6 +56,54 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
         });
     };
 
+    // Calculate Display State (Reactive to Resource Changes)
+    const displayState = useMemo(() => {
+        // Clone state to avoid mutation
+        const next: CharacterState = {
+            ...state,
+            stats: { ...state.stats },
+            derivedStats: { ...state.derivedStats }
+        };
+
+        // Prepare overrides with current resource values
+        const overrides: Record<string, number> = {};
+        state.resources.forEach(r => {
+            const val = resourceValues[r.id] ?? r.initial;
+            overrides[r.name] = val;
+            // Also override by ID if different (e.g. "HP" vs "Hit Points")
+            if (r.id !== r.name) overrides[r.id] = val;
+        });
+
+        // Helper to re-calculate dynamic modifiers
+        const applyDynamicUpdates = (modifiers: Record<string, string> | undefined) => {
+            if (!modifiers) return;
+            for (const [key, formula] of Object.entries(modifiers)) {
+                const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+
+                // Calculate with initial values (Max HP etc) - this is what is currently in state.stats
+                const initialVal = CharacterCalculator.evaluateFormula(formula, state);
+
+                // Calculate with current values
+                const currentVal = CharacterCalculator.evaluateFormula(formula, state, overrides);
+
+                const delta = currentVal - initialVal;
+                if (delta !== 0) {
+                    next.stats[normalizedKey] = (next.stats[normalizedKey] || 0) + delta;
+                }
+            }
+        };
+
+        // Re-apply all dynamic modifiers
+        state.equipment.forEach(i => applyDynamicUpdates(i.dynamicModifiers));
+        state.skills.forEach(s => applyDynamicUpdates(s.dynamicModifiers));
+
+        // Recalculate Derived Stats (e.g. Attack, Defense which might depend on modified stats or resources)
+        const formulas = CharacterCalculator.getFormulas(state);
+        CharacterCalculator.calculateDerivedStats(next, formulas, overrides);
+
+        return next;
+    }, [state, resourceValues]);
+
     // Handle Rolls (Ephemeral)
     const handleRoll = (result: RollResult) => {
         setRollHistory(prev => [result, ...prev]);
@@ -63,13 +111,10 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
 
     // Helper for quick rolls
     const performRoll = (formula: string, description?: string) => {
-        // We need to pass the current resource values to the roller if we want to support resource variables in rolls?
-        // Currently DiceRoller uses state.stats.
-        // If we want to use {HP} in a roll, we need to merge resourceValues into state for the roll.
+        // Use displayState as base so we get updated stats (e.g. Attack)
+        const tempState = { ...displayState };
 
-        // Create a temporary state with current resource values mapped by Name
-        const tempState = { ...state };
-        // Map resource values to stats for formula evaluation
+        // Inject current resource values into stats so {HP} works in the roll formula itself
         state.resources.forEach(r => {
             const val = resourceValues[r.id] ?? r.initial;
             tempState.stats = { ...tempState.stats, [r.name]: val };
@@ -92,7 +137,7 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
         const standardOrder = [...STANDARD_STAT_ORDER, ...(state.customMainStats || [])];
 
         // Separate stats into Standard and Bonuses
-        const allKeys = Array.from(new Set([...Object.keys(state.stats), ...Object.keys(state.derivedStats)]));
+        const allKeys = Array.from(new Set([...Object.keys(displayState.stats), ...Object.keys(displayState.derivedStats)]));
         const mainStats = allKeys.filter(key => standardOrder.includes(key));
         const bonusStats = allKeys.filter(key => !standardOrder.includes(key));
 
@@ -106,7 +151,7 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
                 {/* Main Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {sortedMainStats.map((key) => {
-                        const value = state.derivedStats[key] ?? state.stats[key];
+                        const value = displayState.derivedStats[key] ?? displayState.stats[key];
                         const label = labelMap[key] || key;
                         return (
                             <div key={key} className="flex flex-col p-3 bg-muted/50 rounded-lg relative group">
@@ -137,7 +182,7 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
                         <CardContent>
                             <div className="flex flex-wrap gap-4">
                                 {bonusStats.map((key) => {
-                                    const value = state.derivedStats[key] ?? state.stats[key];
+                                    const value = displayState.derivedStats[key] ?? displayState.stats[key];
                                     const label = labelMap[key] || key;
                                     return (
                                         <div key={key} className="flex items-center gap-2 px-3 py-2 bg-secondary/50 rounded-md border">

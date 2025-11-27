@@ -162,6 +162,22 @@ export class CharacterCalculator {
         // Calculate Derived Stats
         this.calculateDerivedStats(state, formulas);
 
+        // Ensure HP and MP are in resources
+        const ensureResource = (key: string, name: string) => {
+            if (!state.resources.find(r => r.id === key)) {
+                const max = state.derivedStats[key] || 0;
+                state.resources.push({
+                    id: key,
+                    name: name,
+                    max: max,
+                    min: 0,
+                    initial: max,
+                });
+            }
+        };
+        ensureResource('HP', 'HP');
+        ensureResource('MP', 'MP');
+
         // Calculate free exp
         state.exp.free = state.exp.total - state.exp.used;
 
@@ -276,8 +292,11 @@ export class CharacterCalculator {
     /**
      * Evaluates a formula string against the character state.
      * Supports {Variable} syntax for stats.
+     * @param formula The formula string to evaluate.
+     * @param state The character state to use for variable resolution.
+     * @param overrides Optional map of variable names to values to override state values.
      */
-    public static evaluateFormula(formula: string, state: CharacterState): number {
+    public static evaluateFormula(formula: string, state: CharacterState, overrides: Record<string, number> = {}): number {
         try {
             // 1. Prepare Scope
             const scope: Record<string, number> = {};
@@ -290,6 +309,11 @@ export class CharacterCalculator {
                 scope[key] = value;
             }
 
+            // Apply overrides
+            for (const [key, value] of Object.entries(overrides)) {
+                scope[key] = value;
+            }
+
             // 2. Process Formula: Replace {Key} with value
             // We look for {Key} patterns.
             // Key can be English or Japanese.
@@ -299,12 +323,17 @@ export class CharacterCalculator {
                 // 1. Check if it's a known Japanese key -> convert to English
                 const enKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
 
-                // 2. Check if it exists in scope
+                // 2. Check override first
+                if (enKey in overrides) {
+                    return overrides[enKey].toString();
+                }
+
+                // 3. Check if it exists in scope
                 if (enKey in scope) {
                     return scope[enKey].toString();
                 }
 
-                // 3. If not found, return 0 (safe default)
+                // 4. If not found, return 0 (safe default)
                 return '0';
             });
 
@@ -316,12 +345,40 @@ export class CharacterCalculator {
         }
     }
     /**
+     * Gathers all formulas from defaults and character state (equipment/skills).
+     */
+    public static getFormulas(state: CharacterState): Record<string, string> {
+        const formulas = { ...this.DEFAULT_FORMULAS };
+
+        // Apply Equipment Overrides
+        for (const item of state.equipment) {
+            if (item.formulaOverrides) {
+                for (const [key, formula] of Object.entries(item.formulaOverrides)) {
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                    formulas[normalizedKey] = formula;
+                }
+            }
+        }
+
+        // Apply Skill Overrides
+        for (const skill of state.skills) {
+            if (skill.formulaOverrides) {
+                for (const [key, formula] of Object.entries(skill.formulaOverrides)) {
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                    formulas[normalizedKey] = formula;
+                }
+            }
+        }
+        return formulas;
+    }
+
+    /**
      * Calculates derived stats based on formulas.
      * Adds any direct stat bonuses (from Growth/Items) to the formula result.
      */
-    public static calculateDerivedStats(state: CharacterState, formulas: Record<string, string>): void {
+    public static calculateDerivedStats(state: CharacterState, formulas: Record<string, string>, overrides: Record<string, number> = {}): void {
         for (const [key, formula] of Object.entries(formulas)) {
-            const formulaResult = this.evaluateFormula(formula, state);
+            const formulaResult = this.evaluateFormula(formula, state, overrides);
             const additiveBonus = state.stats[key] || 0;
             state.derivedStats[key] = formulaResult + additiveBonus;
         }
