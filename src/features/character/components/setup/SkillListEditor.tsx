@@ -138,7 +138,11 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
                                                 </div>
                                                 <div className="grid gap-2">
                                                     <Label>消費コスト</Label>
-                                                    <Input value={skill.cost} onChange={e => handleSkillChange(index, 'cost', e.target.value)} />
+                                                    <Input
+                                                        value={skill.cost}
+                                                        onChange={e => handleSkillChange(index, 'cost', e.target.value)}
+                                                        placeholder="MP-5, 弾薬-1"
+                                                    />
                                                 </div>
                                                 <div className="grid gap-2">
                                                     <Label>継続</Label>

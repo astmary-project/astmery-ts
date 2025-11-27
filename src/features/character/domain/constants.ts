@@ -15,7 +15,7 @@ export const STAT_LABELS: Record<string, string> = {
     'RecoveryAmount': '回復量',
     'KnowledgeCheck': '知識判定',
     'GatheringCount': '採集回数',
-    'SpellCheck': '魔術行使',
+    'SpellCheck': '魔術行使判定',
 };
 
 export const STANDARD_STAT_ORDER = [
