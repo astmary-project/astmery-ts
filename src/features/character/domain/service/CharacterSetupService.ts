@@ -11,7 +11,8 @@ export interface SkillInput {
     id: string;
     name: string;
     type: string;
-    effect: string;
+    summary: string; // New: Human readable description
+    effect: string;  // DSL for parsing
     timing: string;
     cooldown: string;
     target: string;
@@ -30,7 +31,8 @@ export interface ItemInput {
     id: string;
     name: string;
     type: 'Weapon' | 'Armor' | 'Accessory' | 'Other';
-    effect: string;
+    summary: string; // New: Human readable description
+    effect: string;  // DSL for parsing
 }
 
 export interface CustomStatInput {
@@ -137,7 +139,8 @@ export class CharacterSetupService {
                 id: s.id,
                 name: s.name,
                 type: s.type,
-                description: s.effect,
+                description: s.summary, // Use summary for description
+                effect: s.effect,       // Store raw effect string
                 statModifiers: Object.keys(statModifiers).length > 0 ? statModifiers : undefined,
                 dynamicModifiers: Object.keys(dynamicModifiers).length > 0 ? dynamicModifiers : undefined,
                 grantedStats: grantedStats.length > 0 ? grantedStats : undefined,
@@ -174,7 +177,8 @@ export class CharacterSetupService {
 
                 const isDiff = initial.name !== s.name ||
                     initial.type !== s.type ||
-                    initial.description !== s.effect ||
+                    initial.description !== s.summary ||
+                    initial.effect !== s.effect ||
                     initial.timing !== s.timing ||
                     initial.cooldown !== s.cooldown ||
                     initial.target !== s.target ||
@@ -232,7 +236,8 @@ export class CharacterSetupService {
                 id: i.id,
                 name: i.name,
                 type: i.type,
-                description: i.effect,
+                description: i.summary, // Use summary for description
+                effect: i.effect,       // Store raw effect string
                 statModifiers: Object.keys(statModifiers).length > 0 ? statModifiers : undefined,
                 dynamicModifiers: Object.keys(dynamicModifiers).length > 0 ? dynamicModifiers : undefined,
                 grantedStats: grantedStats.length > 0 ? grantedStats : undefined,
@@ -257,7 +262,8 @@ export class CharacterSetupService {
 
                 const isDiff = initial.name !== i.name ||
                     initial.type !== i.type ||
-                    initial.description !== i.effect ||
+                    initial.description !== i.summary ||
+                    initial.effect !== i.effect ||
                     JSON.stringify(initialModifiers) !== JSON.stringify(statModifiers) ||
                     JSON.stringify(initialDynamic) !== JSON.stringify(dynamicModifiers) ||
                     JSON.stringify(initialGrantedStats) !== JSON.stringify(grantedStats) ||

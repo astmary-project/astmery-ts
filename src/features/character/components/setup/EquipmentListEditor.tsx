@@ -18,7 +18,7 @@ export function EquipmentListEditor({ equipment, onChange }: EquipmentListEditor
     };
 
     const addEquipment = () => {
-        onChange([...equipment, { id: crypto.randomUUID(), name: '', type: 'Weapon', effect: '' }]);
+        onChange([...equipment, { id: crypto.randomUUID(), name: '', type: 'Weapon', summary: '', effect: '' }]);
     };
 
     const removeEquipment = (index: number) => {
@@ -54,6 +54,11 @@ export function EquipmentListEditor({ equipment, onChange }: EquipmentListEditor
                                     </SelectContent>
                                 </Select>
                             </div>
+                            <Input
+                                placeholder="概要 (フレーバーテキスト)"
+                                value={item.summary}
+                                onChange={e => handleEquipmentChange(index, 'summary', e.target.value)}
+                            />
                             <Input
                                 placeholder="効果 / 補正 (例: 攻撃+2)"
                                 value={item.effect}

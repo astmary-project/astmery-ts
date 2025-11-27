@@ -25,6 +25,7 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
             id: crypto.randomUUID(),
             name: '',
             type: 'Passive',
+            summary: '', // New
             effect: '',
             timing: '', cooldown: '', target: '', range: '', cost: '', roll: '',
             magicGrade: '', shape: '', duration: '', activeCheck: '', passiveCheck: '', chatPalette: ''
@@ -75,6 +76,14 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <Input
+                                    placeholder="概要 (フレーバーテキスト)"
+                                    value={skill.summary}
+                                    onChange={e => handleSkillChange(index, 'summary', e.target.value)}
+                                    className="flex-1"
+                                />
                             </div>
                             <div className="flex gap-2">
                                 <Input

@@ -68,7 +68,8 @@ export default function CharacterSetupPage() {
                 id: s.id,
                 name: s.name,
                 type: s.type,
-                effect: s.description || '',
+                summary: s.description,
+                effect: s.effect || s.description, // Fallback to description if effect is missing
                 timing: s.timing || '',
                 cooldown: s.cooldown || '',
                 target: s.target || '',
@@ -89,7 +90,8 @@ export default function CharacterSetupPage() {
                 id: i.id,
                 name: i.name,
                 type: i.type as any,
-                effect: i.description || '',
+                summary: i.description,
+                effect: i.effect || i.description,
             })));
 
             // Load Custom Stats
