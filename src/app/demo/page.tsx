@@ -17,7 +17,7 @@ import { useCharacterSheet } from '@/features/character/hooks/useCharacterSheet'
 
 export default function DemoPage() {
     const characterId = '00000000-0000-0000-0000-000000000001';
-    const { name, character, state, logs, isLoading, updateName, addLog, updateProfile } = useCharacterSheet(characterId);
+    const { name, character, state, logs, isLoading, updateName, addLog, deleteLog, updateProfile } = useCharacterSheet(characterId);
     console.log('logs', logs);
 
     // Seed data logic removed to prevent infinite loop.
@@ -43,6 +43,7 @@ export default function DemoPage() {
                 state={state}
                 logs={logs}
                 onAddLog={addLog}
+                onDeleteLog={deleteLog}
             />
         </div>
     );

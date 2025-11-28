@@ -299,7 +299,7 @@ export class CharacterCalculator {
     public static evaluateFormula(formula: string, state: CharacterState, overrides: Record<string, number> = {}): number {
         try {
             // 1. Prepare Scope
-            const scope: Record<string, number> = {};
+            const scope: Record<string, any> = {}; // Changed to any to support data object
 
             // Add all stats to scope (English keys)
             for (const [key, value] of Object.entries(state.stats)) {
@@ -314,27 +314,55 @@ export class CharacterCalculator {
                 scope[key] = value;
             }
 
-            // 2. Process Formula: Replace {Key} with value
-            // We look for {Key} patterns.
-            // Key can be English or Japanese.
-            let processedFormula = formula.replace(/\{(.+?)\}/g, (match, key) => {
-                const trimmedKey = key.trim();
-                // Try to resolve key
-                // 1. Check if it's a known Japanese key -> convert to English
-                const enKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
+            // Add 'data' object for Japanese variable access (normalized format)
+            scope['data'] = { ...scope };
 
-                // 2. Check override first
-                if (enKey in overrides) {
-                    return overrides[enKey].toString();
-                }
+            // 2. Process Formula
+            // First, normalize the formula (handles Japanese keys -> English, and wraps custom Japanese in data["..."])
+            let processedFormula = this.normalizeFormula(formula);
 
-                // 3. Check if it exists in scope
-                if (enKey in scope) {
-                    return scope[enKey].toString();
-                }
+            // Replace {Key} with value (for English keys or keys that were normalized to English)
+            // Note: normalizeFormula might have already replaced known Japanese keys with English keys.
+            // But {Key} syntax might still exist if the user typed {Body}.
+            // Also normalizeFormula does NOT remove braces.
+            // So {Body} remains {Body}. {肉体} becomes {Body}.
+            // {カルマ} becomes {data["カルマ"]}? No, normalizeFormula regex `([^\x00-\x7F]+)` matches `肉体`.
+            // If input is `{肉体}`, normalizeFormula sees `肉体` inside braces?
+            // normalizeFormula: `normalized = normalized.split(jp).join(en);`
+            // So `{肉体}` becomes `{Body}`.
+            // `{カルマ}` becomes `{data["カルマ"]}`.
 
-                // 4. If not found, return 0 (safe default)
-                return '0';
+            // We need to handle {Key} replacement AFTER normalization.
+            // But wait, if it becomes `{data["カルマ"]}`, the regex `\{(.+?)\}` will match `data["カルマ"]`.
+            // And we try to look up `data["カルマ"]` in scope? No.
+            // The current `evaluateFormula` logic tries to look up `key` in `overrides` or `scope`.
+            // `scope` has `data`. But `scope['data["カルマ"]']` is undefined.
+
+            // So we should NOT use `normalizeFormula` blindly if we rely on `{Key}` replacement logic.
+            // OR we update `{Key}` replacement logic to handle `data[...]`.
+
+            // Actually, `evaluateFormula` was originally designed to replace `{Key}` with VALUES directly in the string.
+            // `normalizeFormula` was designed for `mathjs` to evaluate variables.
+
+            // If we use `mathjs` with scope, we don't strictly need `{Key}` replacement if `mathjs` can resolve variables.
+            // BUT `mathjs` needs `data["..."]` for Japanese.
+
+            // So:
+            // 1. Normalize formula (Japanese -> English, Custom -> data["..."]).
+            // 2. Pass to mathjs with scope (including data).
+            // 3. BUT we still need to handle `{Key}` syntax because users might use it.
+            //    If users use `{Body}`, mathjs sees `{Body}` which is invalid syntax.
+            //    So we MUST replace `{...}` with values or just remove braces if variable is in scope?
+            //    If we remove braces, `Body` becomes `Body`. `mathjs` resolves `Body`.
+            //    `{data["カルマ"]}` becomes `data["カルマ"]`. `mathjs` resolves it.
+
+            // So the strategy is:
+            // 1. Normalize.
+            // 2. Replace `{X}` with `X`.
+            // 3. Evaluate.
+
+            processedFormula = processedFormula.replace(/\{(.+?)\}/g, (match, key) => {
+                return key;
             });
 
             // 3. Evaluate

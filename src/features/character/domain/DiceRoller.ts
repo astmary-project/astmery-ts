@@ -1,6 +1,11 @@
-import * as math from 'mathjs';
+import { all, create } from 'mathjs';
+import { CharacterCalculator } from './CharacterCalculator';
 import { CharacterState } from './CharacterLog';
-import { JAPANESE_TO_ENGLISH_STATS } from './constants';
+
+const math = create(all, {
+    number: 'number',
+    precision: 14,
+});
 
 export interface RollResult {
     formula: string;
@@ -17,44 +22,46 @@ export class DiceRoller {
      * Replaces XdY with random values and evaluates the expression.
      */
     public static roll(formula: string, state: CharacterState): RollResult {
-        // 1. Separate Formula and Comment
-        // Formula ends at the first space
-        const parts = formula.trim().split(/\s+/);
-        const formulaPart = parts[0];
-        const commentPart = parts.slice(1).join(' ');
+        // 1. Handle Comments
+        const [formulaPart, ...commentParts] = formula.split('#');
+        const comment = commentParts.join('#').trim();
 
-        // 2. Replace {Variable} with values
-        // We use the same logic as CharacterCalculator.evaluateFormula but we need to keep the string for dice parsing.
-        // CharacterCalculator.evaluateFormula returns a number (evaluates everything).
-        // We want to evaluate ONLY the variables, keeping "2d6" etc. intact.
+        // 2. Normalize Formula (Japanese -> English, Custom -> data["..."])
+        // We reuse CharacterCalculator's logic to ensure consistency.
+        // We need to import CharacterCalculator.
+        // Since we are in the same domain, we can assume it's available.
+        // But we need to add the import statement at the top of the file.
+        // For now, let's assume we added it.
 
-        let processedFormula = formulaPart;
+        let processedFormula = CharacterCalculator.normalizeFormula(formulaPart.trim());
 
-        // Replace {Key} with value
-        processedFormula = processedFormula.replace(/\{([^{}]*)\}/g, (match, key) => {
-            const trimmedKey = key.trim();
-            if (!trimmedKey) return '0';
+        // 3. Replace {Variable} with values
+        // We need to handle both standard {Key} and normalized {data["Key"]}.
+        processedFormula = processedFormula.replace(/\{([^{}]*)\}/g, (match: string, key: string) => {
+            let lookupKey = key.trim();
 
-            const enKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
-            // Since we can't easily access the private map or import it here without changing imports,
-            // let's assume we can use state.stats/derivedStats directly or use a helper.
-            // Actually, CharacterCalculator.evaluateFormula logic is what we want but partial.
+            // If it's wrapped in data["..."], extract the inner key
+            const dataMatch = lookupKey.match(/^data\["(.+)"\]$/);
+            if (dataMatch) {
+                lookupKey = dataMatch[1];
+            }
 
-            // Let's just look up in state
-            const val = state.stats[enKey] ?? state.derivedStats[enKey] ?? 0;
+            // Look up in state (English keys or Custom Japanese keys)
+            // Note: normalizeFormula converts known Japanese keys to English.
+            // So if input was {肉体}, it became {Body}. lookupKey is Body.
+            // If input was {カルマ}, it became {data["カルマ"]}. lookupKey is カルマ.
+
+            const val = state.stats[lookupKey] ?? state.derivedStats[lookupKey] ?? 0;
             return val.toString();
         });
-
-        // However, we need to handle the mapping properly.
-        // Let's import JAPANESE_TO_ENGLISH_STATS at the top of this file.
 
         let details = processedFormula;
         let isCritical = false;
         let isFumble = false;
 
-        // 3. Parse dice notation (XdY)
+        // 4. Parse dice notation (XdY)
         const diceRegex = /(\d+)d(\d+)/g;
-        details = details.replace(diceRegex, (match, countStr, sidesStr) => {
+        details = details.replace(diceRegex, (match: string, countStr: string, sidesStr: string) => {
             const count = parseInt(countStr, 10);
             const sides = parseInt(sidesStr, 10);
             const rolls: number[] = [];
@@ -72,8 +79,8 @@ export class DiceRoller {
             return '[' + rolls.join(', ') + ']';
         });
 
-        // 4. Evaluate the final expression
-        const evalString = details.replace(/\[([\d, ]+)\]/g, (match, content) => {
+        // 5. Evaluate the final expression
+        const evalString = details.replace(/\[([\d, ]+)\]/g, (match: string, content: string) => {
             const rolls = content.split(',').map((s: string) => parseInt(s.trim(), 10));
             const sum = rolls.reduce((a: number, b: number) => a + b, 0);
             return '(' + sum + ')';
@@ -81,15 +88,26 @@ export class DiceRoller {
 
         let total = 0;
         try {
-            total = math.evaluate(evalString);
+            // Prepare scope for mathjs
+            const scope: Record<string, any> = {};
+            for (const [key, value] of Object.entries(state.stats)) {
+                scope[key] = value;
+            }
+            for (const [key, value] of Object.entries(state.derivedStats)) {
+                scope[key] = value;
+            }
+            // Add data object for Japanese variables
+            scope['data'] = { ...scope };
+
+            total = math.evaluate(evalString, scope);
         } catch (e) {
             console.error('Failed to evaluate roll:', evalString, e);
             total = 0;
         }
 
-        // Append comment to details if present
-        if (commentPart) {
-            details += ` ${commentPart}`;
+        // Append comment if present
+        if (comment) {
+            details += ` # ${comment}`;
         }
 
         return {
