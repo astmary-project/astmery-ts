@@ -2,11 +2,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEffect, useMemo, useState } from 'react';
 
 import { CharacterCalculator } from '../domain/CharacterCalculator';
-import { CharacterLogEntry, CharacterState } from '../domain/CharacterLog';
+import { CharacterLogEntry, CharacterState, Item, Skill } from '../domain/CharacterLog';
 import { JAPANESE_TO_ENGLISH_STATS } from '../domain/constants';
 import { DiceRoller, RollResult } from '../domain/DiceRoller';
 import { CharacterHeader } from './CharacterHeader';
 import { DicePanel } from './DicePanel';
+import { BioPanel } from './sheet/BioPanel';
 import { EquipmentPanel } from './sheet/EquipmentPanel';
 import { HistoryPanel } from './sheet/HistoryPanel';
 import { ResourcePanel } from './sheet/ResourcePanel';
@@ -24,9 +25,13 @@ interface CharacterSheetProps {
     logs: CharacterLogEntry[];
     onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
     onNameChange?: (name: string) => void;
+    onAvatarChange?: (url: string) => void;
     onDeleteLog: (logId: string) => void;
+    isEditMode?: boolean;
+    onToggleEditMode?: () => void;
+    onUpdateProfile?: (profile: Partial<{ bio: string; specialtyElements: string[] }>) => void;
 }
-export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDeleteLog, onNameChange }: CharacterSheetProps) => {
+export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDeleteLog, onNameChange, onAvatarChange, isEditMode = false, onToggleEditMode, onUpdateProfile }: CharacterSheetProps) => {
     // Ephemeral State (Session Scope)
     const [resourceValues, setResourceValues] = useState<Record<string, number>>({});
     const [rollHistory, setRollHistory] = useState<RollResult[]>([]);
@@ -227,6 +232,60 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
         handleRoll(result);
     };
 
+    // Handle Stat Growth
+    const handleStatGrowth = (key: string, cost: number) => {
+        // 1. Check if enough EXP
+        if (state.exp.free < cost) {
+            // Should be handled by UI, but double check
+            return;
+        }
+
+        // 2. Add Log for Stat Growth
+        onAddLog({
+            type: 'GROW_STAT',
+            statGrowth: {
+                key,
+                value: 1, // Always +1 for now
+                cost
+            },
+            description: `Increased ${key} by 1 (Cost: ${cost} EXP)`
+        });
+    };
+
+    // Handle Skill Actions
+    const handleAddSkill = (skill: Skill) => {
+        onAddLog({
+            type: 'LEARN_SKILL',
+            skill,
+            description: `Learned skill: ${skill.name}`
+        });
+    };
+
+    const handleUpdateSkill = (skill: Skill) => {
+        onAddLog({
+            type: 'UPDATE_SKILL',
+            skill,
+            description: `Updated skill: ${skill.name}`
+        });
+    };
+
+    // Handle Item Actions
+    const handleAddItem = (item: Item) => {
+        onAddLog({
+            type: 'EQUIP',
+            item,
+            description: `Equipped item: ${item.name}`
+        });
+    };
+
+    const handleUpdateItem = (item: Item) => {
+        onAddLog({
+            type: 'UPDATE_ITEM',
+            item,
+            description: `Updated item: ${item.name}`
+        });
+    };
+
     return (
         <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6">
             <CharacterHeader
@@ -235,17 +294,22 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
                 bio={character?.bio || undefined}
                 specialtyElements={character?.specialtyElements || undefined}
                 exp={state.exp}
+                grade={state.stats['Grade']}
                 onNameChange={onNameChange}
+                onAvatarChange={onAvatarChange}
+                isEditMode={isEditMode}
+                onToggleEditMode={onToggleEditMode}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Left Column: Character Sheet (8 cols) */}
                 <div className="lg:col-span-8 space-y-6">
                     <Tabs defaultValue="status" className="w-full">
-                        <TabsList className="grid w-full grid-cols-4">
+                        <TabsList className="grid w-full grid-cols-5">
                             <TabsTrigger value="status">ステータス</TabsTrigger>
                             <TabsTrigger value="skills">スキル</TabsTrigger>
                             <TabsTrigger value="equipment">装備</TabsTrigger>
+                            <TabsTrigger value="bio">設定・Bio</TabsTrigger>
                             <TabsTrigger value="history">履歴</TabsTrigger>
                         </TabsList>
 
@@ -255,6 +319,8 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
                                 state={state}
                                 displayState={displayState}
                                 onRoll={performRoll}
+                                isEditMode={isEditMode}
+                                onGrow={handleStatGrowth}
                             />
                             <ResourcePanel
                                 state={state}
@@ -268,6 +334,9 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
                                 state={state}
                                 onAddLog={onAddLog}
                                 onRoll={performRoll}
+                                isEditMode={isEditMode}
+                                onAddSkill={handleAddSkill}
+                                onUpdateSkill={handleUpdateSkill}
                             />
                         </TabsContent>
 
@@ -276,6 +345,22 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
                             <EquipmentPanel
                                 state={state}
                                 onAddLog={onAddLog}
+                                onRoll={performRoll}
+                                isEditMode={isEditMode}
+                                onAddItem={handleAddItem}
+                                onUpdateItem={handleUpdateItem}
+                            />
+                        </TabsContent>
+
+                        {/* Bio Tab */}
+                        <TabsContent value="bio">
+                            <BioPanel
+                                bio={character?.bio}
+                                tags={state.tags}
+                                isEditMode={isEditMode}
+                                onUpdateBio={(bio) => onUpdateProfile?.({ bio })}
+                                onAddTag={(tag) => onAddLog({ type: 'ADD_TAG', tagId: tag, description: `Added tag: ${tag}` })}
+                                onRemoveTag={(tag) => onAddLog({ type: 'REMOVE_TAG', tagId: tag, description: `Removed tag: ${tag}` })}
                             />
                         </TabsContent>
 

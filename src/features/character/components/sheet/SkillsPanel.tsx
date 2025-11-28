@@ -1,22 +1,75 @@
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dices, Trash2 } from 'lucide-react';
+import { Dices, Plus, Settings2, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { CharacterLogEntry, CharacterState, Skill } from '../../domain/CharacterLog';
 import { STANDARD_CHECK_FORMULAS } from '../../domain/constants';
+import { SkillEditorDialog } from './SkillEditorDialog';
 
 interface SkillsPanelProps {
     state: CharacterState;
-    onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
     onRoll: (formula: string, description?: string) => void;
+    isEditMode?: boolean;
+    onAddSkill?: (skill: Skill) => void;
+    onUpdateSkill?: (skill: Skill) => void;
+    onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
 }
 
-export const SkillsPanel = ({ state, onAddLog, onRoll }: SkillsPanelProps) => {
+export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAddSkill, onUpdateSkill }: SkillsPanelProps) => {
+    const [editingSkill, setEditingSkill] = useState<{ skill: Partial<Skill>; mode: 'add' | 'edit' } | null>(null);
+
+    const handleAddClick = () => {
+        setEditingSkill({ skill: {}, mode: 'add' });
+    };
+
+    const handleEditClick = (skill: Skill) => {
+        setEditingSkill({ skill, mode: 'edit' });
+    };
+
+    const handleSaveSkill = (skill: Partial<Skill>) => {
+        if (editingSkill?.mode === 'add' && onAddSkill) {
+            onAddSkill({ ...skill, id: crypto.randomUUID() } as Skill);
+        } else if (editingSkill?.mode === 'edit' && onUpdateSkill) {
+            onUpdateSkill(skill as Skill);
+        }
+        setEditingSkill(null);
+    };
+
+    const handleAcquireSkill = (skill: Partial<Skill>, cost: number, isSuccess: boolean) => {
+        // 1. Deduct EXP (if cost > 0)
+        if (cost > 0) {
+            onAddLog({
+                type: 'SPEND_EXP',
+                value: cost,
+                description: isSuccess
+                    ? `Spent ${cost} EXP to acquire skill: ${skill.name}`
+                    : `Spent ${cost} EXP on failed attempt for: ${skill.name}`
+            });
+        }
+
+        // 2. Add Skill (if success)
+        if (isSuccess && onAddSkill) {
+            onAddSkill({ ...skill, id: crypto.randomUUID() } as Skill);
+        }
+
+        setEditingSkill(null);
+    };
+
+    const SKILL_TYPE_LABELS: Record<string, string> = {
+        'Active': 'アクティブ',
+        'Passive': 'パッシブ',
+        'Spell': '魔術',
+        'Other': 'その他',
+    };
+
     const renderSkillSection = (title: string, skills: Skill[]) => {
         if (skills.length === 0) return null;
+        const displayTitle = SKILL_TYPE_LABELS[title] || title;
         return (
             <div className="mb-6 last:mb-0">
                 <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                    {title}
+                    {displayTitle}
                     <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                         {skills.length}
                     </span>
@@ -24,7 +77,18 @@ export const SkillsPanel = ({ state, onAddLog, onRoll }: SkillsPanelProps) => {
                 <div className="grid gap-3">
                     {skills.map(skill => (
                         <div key={skill.id} className="p-3 border rounded-lg bg-card hover:bg-accent/5 transition-colors group relative">
-                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {/* Delete Button (Hover) */}
+                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                {isEditMode && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                        onClick={() => handleEditClick(skill)}
+                                    >
+                                        <Settings2 size={16} />
+                                    </Button>
+                                )}
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -38,9 +102,15 @@ export const SkillsPanel = ({ state, onAddLog, onRoll }: SkillsPanelProps) => {
                                     <Trash2 size={16} />
                                 </Button>
                             </div>
-                            <div className="flex justify-between items-start mb-1">
-                                <div className="font-medium flex items-center gap-2">
+
+                            <div className="flex justify-between items-start mb-1 pr-16">
+                                <div className="font-medium flex items-center gap-2 flex-wrap">
                                     {skill.name}
+                                    {skill.acquisitionType && skill.acquisitionType !== 'Standard' && (
+                                        <Badge variant="outline" className="text-[10px] h-5">
+                                            {skill.acquisitionType}
+                                        </Badge>
+                                    )}
                                     {skill.cost && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">Cost: {skill.cost}</span>}
                                     {skill.magicGrade && <span className="text-xs bg-secondary/10 text-secondary-foreground px-1.5 py-0.5 rounded">Grade: {skill.magicGrade}</span>}
                                 </div>
@@ -77,9 +147,7 @@ export const SkillsPanel = ({ state, onAddLog, onRoll }: SkillsPanelProps) => {
                                                 className="h-5 w-5 ml-1"
                                                 onClick={() => {
                                                     // Resolve formula
-                                                    // 1. Check if activeCheck is a known standard formula
                                                     const baseFormula = STANDARD_CHECK_FORMULAS[skill.activeCheck!] || skill.activeCheck!;
-                                                    // 2. Append modifier if present
                                                     const fullFormula = skill.rollModifier
                                                         ? `${baseFormula} + ${skill.rollModifier}`
                                                         : baseFormula;
@@ -177,6 +245,26 @@ export const SkillsPanel = ({ state, onAddLog, onRoll }: SkillsPanelProps) => {
                 })()}
 
                 {state.skills.length === 0 && <p className="text-muted-foreground text-center py-8">スキルを習得していません。</p>}
+
+                {isEditMode && (
+                    <div className="mt-6 border-t pt-4">
+                        <Button className="w-full" variant="outline" onClick={handleAddClick}>
+                            <Plus className="mr-2 h-4 w-4" /> スキルを追加
+                        </Button>
+                    </div>
+                )}
+
+                {editingSkill && (
+                    <SkillEditorDialog
+                        isOpen={!!editingSkill}
+                        onClose={() => setEditingSkill(null)}
+                        initialSkill={editingSkill.skill}
+                        onSave={handleSaveSkill}
+                        onAcquire={handleAcquireSkill}
+                        mode={editingSkill.mode}
+                        currentFreeSkills={state.skills.filter(s => s.acquisitionType === 'Free').length}
+                    />
+                )}
             </CardContent>
         </Card>
     );

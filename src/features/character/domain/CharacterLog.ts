@@ -5,15 +5,18 @@ export type CharacterLogType =
     | 'REMOVE_TAG'
     | 'EQUIP'
     | 'UNEQUIP'
+    | 'UPDATE_ITEM' // New: Update item details
     | 'LEARN_SKILL'
     | 'FORGET_SKILL'
+    | 'UPDATE_SKILL' // New: Update skill details
     | 'GAIN_EXP'
     | 'SPEND_EXP'
     | 'REGISTER_STAT_LABEL'
     | 'REGISTER_RESOURCE'
     | 'UPDATE_RESOURCE' // New: Resource update
     | 'RESET_RESOURCES' // New: Reset all resources
-    | 'ROLL'; // New: Dice roll
+    | 'ROLL' // New: Dice roll
+    | 'GROW_STAT'; // New: Stat growth
 
 export interface CharacterLogEntry {
     id: string;
@@ -35,6 +38,11 @@ export interface CharacterLogEntry {
         resetTarget?: 'initial'; // Required for 'reset'
     };
     diceRoll?: DiceRoll; // New: Dice roll details
+    statGrowth?: {
+        key: string;
+        value: number;
+        cost: number;
+    };
     // Metadata
     description?: string;
 }

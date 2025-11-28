@@ -60,7 +60,7 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
                                             // Display Japanese for standard types, otherwise raw value
                                             skill.type === 'Active' ? 'アクティブ' :
                                                 skill.type === 'Passive' ? 'パッシブ' :
-                                                    skill.type === 'Magic' ? '魔術' :
+                                                    skill.type === 'Spell' ? '魔術' :
                                                         skill.type
                                         }
                                         onChange={e => {
@@ -84,7 +84,7 @@ export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
                                             <DropdownMenuItem onClick={() => handleSkillChange(index, 'type', 'Passive')}>
                                                 パッシブ
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleSkillChange(index, 'type', 'Magic')}>
+                                            <DropdownMenuItem onClick={() => handleSkillChange(index, 'type', 'Spell')}>
                                                 魔術
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>

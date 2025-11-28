@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ImageUpload } from '@/components/ui/image-upload';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -26,6 +27,7 @@ export default function CharacterSetupPage() {
     const [formData, setFormData] = useState({
         name: '',
         bio: '',
+        avatarUrl: '',
         stats: {} as Record<string, number>,
     });
     const [specialtyElements, setSpecialtyElements] = useState<SpecialtyElementInput[]>([]);
@@ -42,6 +44,7 @@ export default function CharacterSetupPage() {
             setFormData({
                 name: name,
                 bio: character?.bio || '',
+                avatarUrl: character?.avatarUrl || '',
                 stats: { ...state.stats },
             });
 
@@ -149,6 +152,7 @@ export default function CharacterSetupPage() {
             name: formData.name,
             profile: {
                 bio: formData.bio,
+                avatarUrl: formData.avatarUrl,
                 specialtyElements: formattedElements,
             },
             logs: finalLogs,
@@ -173,24 +177,37 @@ export default function CharacterSetupPage() {
                         {/* Basic Info */}
                         <div className="space-y-4">
                             <h3 className="text-lg font-semibold border-b pb-2">基本情報</h3>
-                            <div className="grid w-full items-center gap-1.5">
-                                <Label htmlFor="name">キャラクター名</Label>
-                                <Input
-                                    id="name"
-                                    value={formData.name}
-                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    required
-                                />
-                            </div>
 
-                            <div className="grid w-full items-center gap-1.5">
-                                <Label htmlFor="bio">プロフィール / 設定</Label>
-                                <Textarea
-                                    id="bio"
-                                    value={formData.bio}
-                                    onChange={e => setFormData({ ...formData, bio: e.target.value })}
-                                    rows={3}
-                                />
+                            <div className="flex flex-col md:flex-row gap-6">
+                                <div className="shrink-0">
+                                    <Label className="mb-2 block">キャラクター画像</Label>
+                                    <ImageUpload
+                                        value={formData.avatarUrl}
+                                        onChange={(url) => setFormData({ ...formData, avatarUrl: url })}
+                                    />
+                                </div>
+
+                                <div className="flex-1 space-y-4">
+                                    <div className="grid w-full items-center gap-1.5">
+                                        <Label htmlFor="name">キャラクター名</Label>
+                                        <Input
+                                            id="name"
+                                            value={formData.name}
+                                            onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                            required
+                                        />
+                                    </div>
+
+                                    <div className="grid w-full items-center gap-1.5">
+                                        <Label htmlFor="bio">プロフィール / 設定</Label>
+                                        <Textarea
+                                            id="bio"
+                                            value={formData.bio}
+                                            onChange={e => setFormData({ ...formData, bio: e.target.value })}
+                                            rows={3}
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Specialty Elements */}

@@ -10,7 +10,7 @@ import { useParams } from 'next/navigation';
 export default function CharacterDetailPage() {
     const params = useParams();
     const characterId = params.id as string;
-    const { name, character, state, logs, isLoading, updateName, addLog, deleteLog, updateProfile } = useCharacterSheet(characterId);
+    const { name, character, state, logs, isLoading, updateName, addLog, deleteLog, updateProfile, isEditMode, toggleEditMode } = useCharacterSheet(characterId);
 
     if (isLoading) {
         return <div className="p-8 text-center">Loading...</div>;
@@ -29,11 +29,15 @@ export default function CharacterDetailPage() {
             <CharacterSheet
                 name={name}
                 onNameChange={updateName}
+                onAvatarChange={(url) => updateProfile({ avatarUrl: url })}
                 character={character}
                 state={state}
                 logs={logs}
                 onAddLog={addLog}
                 onDeleteLog={deleteLog}
+                isEditMode={isEditMode}
+                onToggleEditMode={toggleEditMode}
+                onUpdateProfile={updateProfile}
             />
         </div>
     );

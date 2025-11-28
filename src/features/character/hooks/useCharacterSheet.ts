@@ -7,7 +7,7 @@ import { SupabaseCharacterRepository } from '../infrastructure/SupabaseCharacter
 // Use Supabase repository
 const repository: ICharacterRepository = new SupabaseCharacterRepository();
 
-export const useCharacterSheet = (characterId: string) => {
+export const useCharacterSheet = (characterId: string, sessionContext?: CharacterCalculator.SessionContext) => {
     const [name, setName] = useState<string>('');
     const [logs, setLogs] = useState<CharacterLogEntry[]>([]);
     const [characterProfile, setCharacterProfile] = useState<{
@@ -26,8 +26,8 @@ export const useCharacterSheet = (characterId: string) => {
     // but CharacterCalculator is fast enough for now.
     // Calculated State
     const state: CharacterState = useMemo(() => {
-        return CharacterCalculator.calculateState(logs);
-    }, [logs]);
+        return CharacterCalculator.calculateState(logs, {}, sessionContext);
+    }, [logs, sessionContext]);
 
     // Load initial data
     useEffect(() => {
@@ -36,8 +36,40 @@ export const useCharacterSheet = (characterId: string) => {
             try {
                 const data = await repository.load(characterId);
                 if (data) {
+                    let currentLogs = data.logs;
+                    let needsMigration = false;
+
+                    // Migration: Convert legacy GROWTH to GROW_STAT
+                    const migratedLogs = currentLogs.map(log => {
+                        if (log.type === 'GROWTH' && log.statKey && log.value !== undefined) {
+                            needsMigration = true;
+                            return {
+                                ...log,
+                                type: 'GROW_STAT',
+                                statGrowth: {
+                                    key: log.statKey,
+                                    value: log.value,
+                                    cost: 0 // Default cost for migrated logs
+                                },
+                                // Remove legacy fields
+                                statKey: undefined,
+                                value: undefined
+                            } as CharacterLogEntry;
+                        }
+                        return log;
+                    });
+
+                    if (needsMigration) {
+                        console.log('Migrating legacy logs...');
+                        await repository.save({
+                            ...data,
+                            logs: migratedLogs
+                        });
+                        currentLogs = migratedLogs;
+                    }
+
                     setName(data.name);
-                    setLogs(data.logs);
+                    setLogs(currentLogs);
                     if (data.profile) {
                         setCharacterProfile(data.profile);
                     }
@@ -116,6 +148,8 @@ export const useCharacterSheet = (characterId: string) => {
         await save(name, newLogs, characterProfile);
     };
 
+    const [isEditMode, setIsEditMode] = useState(false);
+
     return {
         name,
         character: characterProfile,
@@ -123,6 +157,8 @@ export const useCharacterSheet = (characterId: string) => {
         logs,
         isLoading,
         error,
+        isEditMode,
+        toggleEditMode: () => setIsEditMode(prev => !prev),
         updateName,
         addLog,
         deleteLog,

@@ -27,8 +27,8 @@ export class CharacterCalculator {
      * Aggregates a list of logs into a final CharacterState.
      */
     private static readonly DEFAULT_FORMULAS: Record<string, string> = {
-        'HP': '({Grade} + {Body}) * 5',
-        'MP': '({Grade} + {Spirit}) * 5',
+        'MaxHP': '({Grade} + {Body}) * 5',
+        'MaxMP': '({Grade} + {Spirit}) * 5',
         'Defense': '{Body}',
         'MagicDefense': '{Spirit}',
         'ActionSpeed': '{Grade} + 3',
@@ -38,7 +38,15 @@ export class CharacterCalculator {
     /**
      * Aggregates a list of logs into a final CharacterState.
      */
-    public static calculateState(logs: CharacterLogEntry[], baseStats: Record<string, number> = {}): CharacterState {
+
+    /**
+     * Aggregates a list of logs into a final CharacterState.
+     */
+    public static calculateState(
+        logs: CharacterLogEntry[],
+        baseStats: Record<string, number> = {},
+        sessionContext: CharacterCalculator.SessionContext = {}
+    ): CharacterState {
         const state: CharacterState = {
             ...this.DEFAULT_STATE,
             stats: { ...baseStats },
@@ -59,6 +67,23 @@ export class CharacterCalculator {
 
         for (const log of sortedLogs) {
             this.applyLog(state, log);
+        }
+
+        // Apply Session Context (Temporary Additions)
+        // 1. Temporary Stats
+        if (sessionContext.tempStats) {
+            for (const [key, value] of Object.entries(sessionContext.tempStats)) {
+                const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + (value as number);
+            }
+        }
+        // 2. Temporary Skills
+        if (sessionContext.tempSkills) {
+            state.skills.push(...sessionContext.tempSkills);
+        }
+        // 3. Temporary Items
+        if (sessionContext.tempItems) {
+            state.equipment.push(...sessionContext.tempItems);
         }
 
         // Prepare Formulas (Start with defaults)
@@ -95,17 +120,6 @@ export class CharacterCalculator {
                             state.customMainStats.push(stat.key);
                         }
                     }
-                    // Initial value is only applied if not already set?
-                    // Or should it be an addition?
-                    // Usually "Grant Stat" means "You have this stat now".
-                    // If we want to track the value, we need to ensure it has a base value.
-                    // But `state.stats` is rebuilt from logs.
-                    // If there are no logs for this stat, it will be 0.
-                    // We should probably set the base value here if it's 0?
-                    // Or maybe `state.stats[stat.key] = (state.stats[stat.key] || 0) + stat.value`?
-                    // If it's an "Initial Value", it should probably be a base.
-                    // But if we save "Growth" logs, they will add to this.
-                    // Let's treat `value` as a base modifier for now.
                     state.stats[stat.key] = (state.stats[stat.key] || 0) + stat.value;
                 }
             }
@@ -165,9 +179,18 @@ export class CharacterCalculator {
         this.calculateDerivedStats(state, formulas);
 
         // Ensure HP and MP are in resources
-        const ensureResource = (key: string, name: string) => {
-            if (!state.resources.find(r => r.id === key)) {
-                const max = state.derivedStats[key] || 0;
+        // Ensure HP and MP are in resources with dynamic Max
+        const ensureResource = (key: string, name: string, statKey: string) => {
+            // Use derived stat for Max
+            const max = state.derivedStats[statKey] || 0;
+
+            const existing = state.resources.find(r => r.id === key);
+            if (existing) {
+                // Update existing resource max
+                existing.max = max;
+                existing.initial = max; // Usually initial is max for HP/MP
+            } else {
+                // Create new resource
                 state.resources.push({
                     id: key,
                     name: name,
@@ -177,8 +200,8 @@ export class CharacterCalculator {
                 });
             }
         };
-        ensureResource('HP', 'HP');
-        ensureResource('MP', 'MP');
+        ensureResource('HP', 'HP', 'MaxHP');
+        ensureResource('MP', 'MP', 'MaxMP');
 
         // Calculate free exp
         state.exp.free = state.exp.total - state.exp.used;
@@ -188,14 +211,30 @@ export class CharacterCalculator {
 
     private static applyLog(state: CharacterState, log: CharacterLogEntry) {
         switch (log.type) {
-            case 'GROWTH':
+            case 'GROW_STAT':
+                if (log.statGrowth) {
+                    const { key, value } = log.statGrowth;
+                    const trimmedKey = key.trim();
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
+                    state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + value;
+                } else if (log.statKey && log.value !== undefined) {
+                    // Fallback for legacy format if any
+                    const trimmedKey = log.statKey.trim();
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
+                    state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + log.value;
+                }
+                break;
+            case 'GROWTH': // Legacy support
                 if (log.statKey && log.value !== undefined) {
-                    state.stats[log.statKey] = (state.stats[log.statKey] || 0) + log.value;
+                    const trimmedKey = log.statKey.trim();
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
+                    state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + log.value;
                 }
                 break;
             case 'SET_VALUE':
                 if (log.statKey && log.value !== undefined) {
-                    state.stats[log.statKey] = log.value;
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[log.statKey] || log.statKey;
+                    state.stats[normalizedKey] = log.value;
                 }
                 break;
             case 'ADD_TAG':
@@ -214,6 +253,14 @@ export class CharacterCalculator {
                     state.equipment = state.equipment.filter(i => i.id !== log.item!.id);
                 }
                 break;
+            case 'UPDATE_ITEM':
+                if (log.item?.id) {
+                    const index = state.equipment.findIndex(i => i.id === log.item!.id);
+                    if (index !== -1) {
+                        state.equipment[index] = { ...state.equipment[index], ...log.item };
+                    }
+                }
+                break;
             case 'LEARN_SKILL':
                 if (log.skill) {
                     state.skills.push(log.skill);
@@ -222,6 +269,14 @@ export class CharacterCalculator {
             case 'FORGET_SKILL':
                 if (log.skill?.id) {
                     state.skills = state.skills.filter(s => s.id !== log.skill!.id);
+                }
+                break;
+            case 'UPDATE_SKILL':
+                if (log.skill?.id) {
+                    const index = state.skills.findIndex(s => s.id === log.skill!.id);
+                    if (index !== -1) {
+                        state.skills[index] = { ...state.skills[index], ...log.skill };
+                    }
                 }
                 break;
             case 'GAIN_EXP':
@@ -538,6 +593,48 @@ export class CharacterCalculator {
             const additiveBonus = state.stats[key] || 0;
             state.derivedStats[key] = formulaResult + additiveBonus;
         }
+    }
+
+    /**
+     * Calculates the EXP cost to increase a stat or grade.
+     * @param currentValue The current value of the stat/grade.
+     * @param isGrade True if the stat is 'Grade'.
+     */
+    public static calculateStatCost(currentValue: number, isGrade: boolean): number {
+        if (isGrade) {
+            return currentValue * 10;
+        }
+        return currentValue * 5;
+    }
+
+    /**
+     * Calculates the EXP cost for skill acquisition.
+     * @param currentFreeSkills Number of existing 'Free' (General) skills.
+     * @param type Acquisition type.
+     * @param isRetry For Grade skills, is this a retry (2nd attempt onwards)?
+     */
+    public static calculateSkillCost(currentFreeSkills: number, type: 'Free' | 'Standard' | 'Grade' | undefined, isRetry: boolean = false): { success: number, failure: number } {
+        if (type === 'Grade') {
+            return {
+                success: 0,
+                failure: isRetry ? 1 : 0
+            };
+        }
+        // Standard/Free (General)
+        // Cost is (Current Free Skills + 1) * 5
+        const cost = (currentFreeSkills + 1) * 5;
+        return {
+            success: cost,
+            failure: 1
+        };
+    }
+}
+
+export namespace CharacterCalculator {
+    export interface SessionContext {
+        tempStats?: Record<string, number>;
+        tempSkills?: CharacterState['skills'];
+        tempItems?: CharacterState['equipment'];
     }
 }
 
