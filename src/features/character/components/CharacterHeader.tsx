@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
-import { Pencil } from 'lucide-react';
+import { ArrowLeft, Pencil } from 'lucide-react';
+import Link from 'next/link';
 import React, { useEffect, useState } from 'react';
 import { CharacterCalculator } from '../domain/CharacterCalculator';
 import { CharacterState } from '../domain/CharacterLog';
@@ -60,9 +61,14 @@ export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
     const expPercentage = exp.total > 0 ? (exp.used / exp.total) * 100 : 0;
 
     return (
-        <Card className="mb-6">
+        <Card className="mb-6 relative">
             <CardContent className="pt-6">
                 <div className="flex flex-col md:flex-row gap-6 items-start">
+                    {/* Back Button */}
+                    <Link href="/character" className="absolute top-4 left-4 text-muted-foreground hover:text-foreground">
+                        <ArrowLeft className="w-6 h-6" />
+                    </Link>
+
                     {/* Avatar */}
                     {onAvatarChange ? (
                         <ImageUpload
