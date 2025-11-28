@@ -64,6 +64,7 @@ export default function CharacterSetupPage() {
                 id: s.id,
                 name: s.name,
                 type: s.type,
+                acquisitionType: s.acquisitionType,
                 summary: s.description,
                 effect: s.effect || '', // No fallback
                 restriction: s.restriction || '',
