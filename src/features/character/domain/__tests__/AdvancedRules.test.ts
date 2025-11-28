@@ -11,7 +11,7 @@ describe('Advanced Rules', () => {
             const state = CharacterCalculator.calculateState(logs);
 
             // Formula using "肉体" (Body)
-            const result = CharacterCalculator.evaluateFormula('肉体 * 2', state);
+            const result = CharacterCalculator.evaluateFormula('{肉体} * 2', state);
             expect(result).toBe(20);
         });
 
@@ -22,7 +22,7 @@ describe('Advanced Rules', () => {
             const state = CharacterCalculator.calculateState(logs);
 
             // Formula using custom Japanese stat
-            const result = CharacterCalculator.evaluateFormula('暗黒パワー + 10', state);
+            const result = CharacterCalculator.evaluateFormula('{暗黒パワー} + 10', state);
             expect(result).toBe(60);
         });
 
@@ -34,7 +34,7 @@ describe('Advanced Rules', () => {
             const state = CharacterCalculator.calculateState(logs);
 
             // Body (English) + 精神 (Spirit in JP)
-            const result = CharacterCalculator.evaluateFormula('Body + 精神', state);
+            const result = CharacterCalculator.evaluateFormula('{Body} + {精神}', state);
             expect(result).toBe(15);
         });
     });
@@ -47,14 +47,14 @@ describe('Advanced Rules', () => {
                 {
                     id: '2', type: 'EQUIP', timestamp: 2, item: {
                         id: 'i1', name: 'Item1', type: 'Other', description: '',
-                        formulaOverrides: { 'Derived1': 'Base * 2' }
+                        formulaOverrides: { 'Derived1': '{Base} * 2' }
                     }
                 },
                 // Skill that defines Derived2 based on Derived1
                 {
                     id: '3', type: 'LEARN_SKILL', timestamp: 3, skill: {
                         id: 's1', name: 'Skill1', type: 'Passive', description: '',
-                        formulaOverrides: { 'Derived2': 'Derived1 + 5' }
+                        formulaOverrides: { 'Derived2': '{Derived1} + 5' }
                     }
                 }
             ];
@@ -78,8 +78,8 @@ describe('Advanced Rules', () => {
                     id: '1', type: 'EQUIP', timestamp: 1, item: {
                         id: 'i1', name: 'Loop', type: 'Other', description: '',
                         formulaOverrides: {
-                            'A': 'B + 1',
-                            'B': 'A + 1'
+                            'A': '{B} + 1',
+                            'B': '{A} + 1'
                         }
                     }
                 }

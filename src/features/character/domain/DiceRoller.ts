@@ -1,6 +1,6 @@
 import { all, create } from 'mathjs';
-import { CharacterCalculator } from './CharacterCalculator';
 import { CharacterState } from './CharacterLog';
+import { JAPANESE_TO_ENGLISH_STATS } from './constants';
 
 const math = create(all, {
     number: 'number',
@@ -26,32 +26,18 @@ export class DiceRoller {
         const [formulaPart, ...commentParts] = formula.split('#');
         const comment = commentParts.join('#').trim();
 
-        // 2. Normalize Formula (Japanese -> English, Custom -> data["..."])
-        // We reuse CharacterCalculator's logic to ensure consistency.
-        // We need to import CharacterCalculator.
-        // Since we are in the same domain, we can assume it's available.
-        // But we need to add the import statement at the top of the file.
-        // For now, let's assume we added it.
+        let processedFormula = formulaPart.trim();
 
-        let processedFormula = CharacterCalculator.normalizeFormula(formulaPart.trim());
+        // 2. Replace {Variable} with values
+        // We look for {Key} patterns.
+        processedFormula = processedFormula.replace(/\{([^{}]+)\}/g, (match, key) => {
+            const trimmedKey = key.trim();
 
-        // 3. Replace {Variable} with values
-        // We need to handle both standard {Key} and normalized {data["Key"]}.
-        processedFormula = processedFormula.replace(/\{([^{}]*)\}/g, (match: string, key: string) => {
-            let lookupKey = key.trim();
+            // Resolve key (handle Japanese aliases)
+            const enKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
 
-            // If it's wrapped in data["..."], extract the inner key
-            const dataMatch = lookupKey.match(/^data\["(.+)"\]$/);
-            if (dataMatch) {
-                lookupKey = dataMatch[1];
-            }
-
-            // Look up in state (English keys or Custom Japanese keys)
-            // Note: normalizeFormula converts known Japanese keys to English.
-            // So if input was {肉体}, it became {Body}. lookupKey is Body.
-            // If input was {カルマ}, it became {data["カルマ"]}. lookupKey is カルマ.
-
-            const val = state.stats[lookupKey] ?? state.derivedStats[lookupKey] ?? 0;
+            // Look up in state
+            const val = state.stats[enKey] ?? state.derivedStats[enKey] ?? 0;
             return val.toString();
         });
 
@@ -59,7 +45,7 @@ export class DiceRoller {
         let isCritical = false;
         let isFumble = false;
 
-        // 4. Parse dice notation (XdY)
+        // 3. Parse dice notation (XdY)
         const diceRegex = /(\d+)d(\d+)/g;
         details = details.replace(diceRegex, (match: string, countStr: string, sidesStr: string) => {
             const count = parseInt(countStr, 10);
@@ -79,7 +65,7 @@ export class DiceRoller {
             return '[' + rolls.join(', ') + ']';
         });
 
-        // 5. Evaluate the final expression
+        // 4. Evaluate the final expression
         const evalString = details.replace(/\[([\d, ]+)\]/g, (match: string, content: string) => {
             const rolls = content.split(',').map((s: string) => parseInt(s.trim(), 10));
             const sum = rolls.reduce((a: number, b: number) => a + b, 0);
@@ -88,21 +74,12 @@ export class DiceRoller {
 
         let total = 0;
         try {
-            // Prepare scope for mathjs
-            const scope: Record<string, any> = {};
-            for (const [key, value] of Object.entries(state.stats)) {
-                scope[key] = value;
-            }
-            for (const [key, value] of Object.entries(state.derivedStats)) {
-                scope[key] = value;
-            }
-            // Add data object for Japanese variables
-            scope['data'] = { ...scope };
-
-            total = math.evaluate(evalString, scope);
+            // Evaluate with empty scope (strict syntax)
+            total = math.evaluate(evalString, {});
         } catch (e) {
-            console.error('Failed to evaluate roll:', evalString, e);
-            total = 0;
+            // If evaluation fails, it's likely a chat message or invalid formula.
+            // Return NaN to indicate no calculation result.
+            total = NaN;
         }
 
         // Append comment if present

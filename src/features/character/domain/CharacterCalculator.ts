@@ -19,6 +19,7 @@ export class CharacterCalculator {
         customLabels: {},
         customMainStats: [],
         resources: [],
+        resourceValues: {},
         recentRolls: [],
     };
 
@@ -49,6 +50,7 @@ export class CharacterCalculator {
             customLabels: {},
             customMainStats: [],
             resources: [],
+            resourceValues: {},
             recentRolls: [],
         };
 
@@ -252,6 +254,168 @@ export class CharacterCalculator {
                     state.recentRolls.pop();
                 }
                 break;
+            case 'UPDATE_RESOURCE':
+                if (log.resourceUpdate) {
+                    const { resourceId, type, value, resetTarget } = log.resourceUpdate;
+                    // Ensure resource exists in values (default to 0 if not set yet, though it should be initialized)
+                    // Actually, we should check if the resource is defined in state.resources?
+                    // But logs might come before resource definition if unordered? (SortedLogs handles this)
+
+                    if (type === 'set' && value !== undefined) {
+                        state.resourceValues[resourceId] = value;
+                    } else if (type === 'modify' && value !== undefined) {
+                        const current = state.resourceValues[resourceId] ?? 0; // Or initial?
+                        // We need to clamp? CharacterCalculator usually enforces rules.
+                        // But min/max might be dynamic.
+                        // For now just add.
+                        state.resourceValues[resourceId] = current + value;
+                    } else if (type === 'reset') {
+                        // Find resource definition to know max/initial
+                        const resource = state.resources.find(r => r.id === resourceId);
+                        if (resource) {
+                            // Default to initial (which is usually max for HP/MP)
+                            // If resetTarget is specified, use it (though we only support 'initial' for now)
+                            state.resourceValues[resourceId] = resource.initial;
+                        } else {
+                            // If resource not found (maybe derived?), try derived stats?
+                            // But resources should be in state.resources.
+                            // If it's a standard resource like HP/MP, it might be added later in calculateState?
+                            // Wait, applyLog runs BEFORE ensureResource('HP', 'MP').
+                            // So if we try to reset HP before it's "ensured", we might fail to find it.
+                            // However, HP/MP are usually derived.
+                            // We might need to handle "implicit" resources or ensure they are added earlier?
+                            // OR, we just set the value. If it's reset, we need the target value.
+                            // If we can't find the resource, we can't reset it effectively unless we know the max/initial.
+                            // But `state.derivedStats` might not be calculated yet!
+                            // `applyLog` runs first, then `calculateDerivedStats`.
+                            // So we CANNOT know the "current max" during `applyLog` loop if it depends on stats.
+
+                            // ISSUE: Resource Reset depends on Derived Stats (Max HP).
+                            // Derived Stats depend on Stats (which are built by logs).
+                            // If we process logs in order, we might have:
+                            // 1. Growth STR+10
+                            // 2. Reset HP (needs Max HP which needs STR)
+                            // 3. Damage HP
+
+                            // We need to calculate derived stats incrementally? Or calculate them on demand?
+                            // `CharacterCalculator` architecture:
+                            // 1. Apply all logs to build base stats.
+                            // 2. Calculate derived stats.
+                            // 3. Ensure resources.
+
+                            // If `UPDATE_RESOURCE` is a log, it happens in step 1.
+                            // But it needs the result of step 2 (Max HP).
+
+                            // SOLUTION:
+                            // We cannot resolve "Reset to Max" during the log application phase if Max depends on future calculations.
+                            // BUT, `state.stats` IS updated incrementally.
+                            // We can calculate derived stats *temporarily* for the reset?
+                            // Or, we store the "Reset Instruction" and apply it later?
+                            // No, because subsequent logs might depend on the value (e.g. Damage).
+
+                            // Actually, `state.stats` is built incrementally.
+                            // So at the point of `UPDATE_RESOURCE`, `state.stats` reflects the state *at that time*.
+                            // So we CAN calculate Max HP at that moment.
+
+                            // We need `getFormulas` and `evaluateFormula` here.
+                            // But `getFormulas` needs `state.equipment` and `skills`, which are also built incrementally.
+                            // So `state` is valid for the current timestamp.
+
+                            // So:
+                            // 1. Get current formulas.
+                            // 2. Calculate Max for the target resource.
+                            // 3. Set value.
+
+                            const formulas = CharacterCalculator.getFormulas(state);
+                            // We need to know which formula corresponds to this resource's "Max".
+                            // For HP, it's 'HP'.
+                            // For custom resources, it's `resource.max`.
+
+                            // If resource is not in `state.resources` yet (e.g. HP/MP before ensureResource),
+                            // we check `formulas`.
+
+                            let max = 0;
+                            if (formulas[resourceId]) {
+                                max = CharacterCalculator.evaluateFormula(formulas[resourceId], state);
+                            } else {
+                                // Maybe it's a fixed resource added by Item/Skill?
+                                const res = state.resources.find(r => r.id === resourceId);
+                                if (res) max = res.max;
+                            }
+                            state.resourceValues[resourceId] = max;
+                        }
+                    }
+                }
+                break;
+            case 'RESET_RESOURCES':
+                // Reset all resources where resetMode !== 'none'
+                // We need to iterate over all defined resources.
+                // Resources are defined in state.resources.
+                // Note: Some resources (like HP/MP) might be added later in ensureResource if not present.
+                // But if they are not present yet, we can't reset them here?
+                // Actually, if this log comes after they are "ensured" (which happens at end of calculation),
+                // wait, `applyLog` happens BEFORE `ensureResource`.
+                // So if we reset HP here, and HP is not in `state.resources`, we do nothing?
+                // This is a problem. HP/MP are "ensured" at the end.
+                // But if we have a log history:
+                // 1. Growth
+                // 2. Reset All
+                // 3. Damage
+
+                // At step 2, HP is not in `state.resources` yet (because ensureResource runs after loop).
+                // So `state.resources` only contains explicitly granted resources.
+
+                // However, `CharacterCalculator` logic is:
+                // 1. Init state (empty resources)
+                // 2. Apply logs (might add resources via REGISTER_RESOURCE or Grant)
+                // 3. Calculate Derived Stats
+                // 4. Ensure HP/MP
+
+                // If `RESET_RESOURCES` is a log, it runs in step 2.
+                // At that point, HP/MP are NOT in `state.resources`.
+                // So `RESET_RESOURCES` would miss HP/MP if they are not explicitly registered.
+
+                // To fix this, we should probably "ensure" HP/MP exist when we encounter a Reset log?
+                // Or we explicitly handle 'HP' and 'MP' in the reset logic if they are not in resources?
+                // But we don't know their Max yet (depends on derived stats).
+
+                // Same issue as single reset: We need Max/Initial value.
+                // But Max depends on Derived Stats, which are calculated AFTER logs.
+
+                // This implies that `RESET_RESOURCES` (and `UPDATE_RESOURCE` for HP/MP) cannot be fully resolved during the first pass of log application if they depend on derived stats.
+                // BUT, `state.stats` IS populated.
+                // We can calculate derived stats on demand.
+
+                // Let's use the same strategy as single reset:
+                // 1. Get formulas.
+                // 2. Calculate Max for HP/MP (and others).
+                // 3. Set value.
+
+                const currentFormulas = CharacterCalculator.getFormulas(state);
+
+                // 1. Reset explicit resources
+                for (const res of state.resources) {
+                    if (res.resetMode !== 'none') {
+                        state.resourceValues[res.id] = res.initial;
+                    }
+                }
+
+                // 2. Reset implicit resources (HP, MP) if not already handled
+                // We assume HP/MP are always reset-able unless explicitly set to 'none' (which we can't do for implicit ones easily).
+                // If they are in state.resources, they are handled above.
+                // If not, we handle them here.
+                const implicitResources = ['HP', 'MP'];
+                for (const key of implicitResources) {
+                    if (!state.resources.find(r => r.id === key)) {
+                        // Calculate Max/Initial
+                        let max = 0;
+                        if (currentFormulas[key]) {
+                            max = CharacterCalculator.evaluateFormula(currentFormulas[key], state);
+                        }
+                        state.resourceValues[key] = max;
+                    }
+                }
+                break;
         }
     }
 
@@ -297,76 +461,40 @@ export class CharacterCalculator {
      * @param overrides Optional map of variable names to values to override state values.
      */
     public static evaluateFormula(formula: string, state: CharacterState, overrides: Record<string, number> = {}): number {
+        let processedFormula = formula;
         try {
-            // 1. Prepare Scope
-            const scope: Record<string, any> = {}; // Changed to any to support data object
+            // 1. Process Formula: Replace {Key} with value
+            // We look for {Key} patterns.
+            // Key can be English or Japanese.
 
-            // Add all stats to scope (English keys)
-            for (const [key, value] of Object.entries(state.stats)) {
-                scope[key] = value;
-            }
-            for (const [key, value] of Object.entries(state.derivedStats)) {
-                scope[key] = value;
-            }
-
-            // Apply overrides
-            for (const [key, value] of Object.entries(overrides)) {
-                scope[key] = value;
-            }
-
-            // Add 'data' object for Japanese variable access (normalized format)
-            scope['data'] = { ...scope };
-
-            // 2. Process Formula
             // First, normalize the formula (handles Japanese keys -> English, and wraps custom Japanese in data["..."])
-            let processedFormula = this.normalizeFormula(formula);
+            // Actually, if we enforce strict {}, we might not need normalizeFormula for the *keys* inside {} if we handle lookup manually.
+            // BUT normalizeFormula handles "standard Japanese aliases" (e.g. 肉体 -> Body).
+            // If user writes {肉体}, we want to look up 'Body'.
+            // Our manual lookup logic below needs to handle that.
 
-            // Replace {Key} with value (for English keys or keys that were normalized to English)
-            // Note: normalizeFormula might have already replaced known Japanese keys with English keys.
-            // But {Key} syntax might still exist if the user typed {Body}.
-            // Also normalizeFormula does NOT remove braces.
-            // So {Body} remains {Body}. {肉体} becomes {Body}.
-            // {カルマ} becomes {data["カルマ"]}? No, normalizeFormula regex `([^\x00-\x7F]+)` matches `肉体`.
-            // If input is `{肉体}`, normalizeFormula sees `肉体` inside braces?
-            // normalizeFormula: `normalized = normalized.split(jp).join(en);`
-            // So `{肉体}` becomes `{Body}`.
-            // `{カルマ}` becomes `{data["カルマ"]}`.
+            // Let's NOT use normalizeFormula on the whole string because it might replace things we don't want if they are not in {}.
+            // The user wants strictness: "text is text, variables are {variables}".
 
-            // We need to handle {Key} replacement AFTER normalization.
-            // But wait, if it becomes `{data["カルマ"]}`, the regex `\{(.+?)\}` will match `data["カルマ"]`.
-            // And we try to look up `data["カルマ"]` in scope? No.
-            // The current `evaluateFormula` logic tries to look up `key` in `overrides` or `scope`.
-            // `scope` has `data`. But `scope['data["カルマ"]']` is undefined.
+            processedFormula = formula.replace(/\{([^{}]+)\}/g, (match, key) => {
+                const trimmedKey = key.trim();
 
-            // So we should NOT use `normalizeFormula` blindly if we rely on `{Key}` replacement logic.
-            // OR we update `{Key}` replacement logic to handle `data[...]`.
+                // 1. Check overrides
+                if (trimmedKey in overrides) {
+                    return overrides[trimmedKey].toString();
+                }
 
-            // Actually, `evaluateFormula` was originally designed to replace `{Key}` with VALUES directly in the string.
-            // `normalizeFormula` was designed for `mathjs` to evaluate variables.
+                // 2. Resolve key (handle Japanese aliases)
+                const enKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
 
-            // If we use `mathjs` with scope, we don't strictly need `{Key}` replacement if `mathjs` can resolve variables.
-            // BUT `mathjs` needs `data["..."]` for Japanese.
-
-            // So:
-            // 1. Normalize formula (Japanese -> English, Custom -> data["..."]).
-            // 2. Pass to mathjs with scope (including data).
-            // 3. BUT we still need to handle `{Key}` syntax because users might use it.
-            //    If users use `{Body}`, mathjs sees `{Body}` which is invalid syntax.
-            //    So we MUST replace `{...}` with values or just remove braces if variable is in scope?
-            //    If we remove braces, `Body` becomes `Body`. `mathjs` resolves `Body`.
-            //    `{data["カルマ"]}` becomes `data["カルマ"]`. `mathjs` resolves it.
-
-            // So the strategy is:
-            // 1. Normalize.
-            // 2. Replace `{X}` with `X`.
-            // 3. Evaluate.
-
-            processedFormula = processedFormula.replace(/\{(.+?)\}/g, (match, key) => {
-                return key;
+                // 3. Look up in state
+                const val = state.stats[enKey] ?? state.derivedStats[enKey] ?? 0;
+                return val.toString();
             });
 
-            // 3. Evaluate
-            return math.evaluate(processedFormula, scope);
+            // 2. Evaluate
+            // We pass an empty scope because all variables should have been replaced by numbers.
+            return math.evaluate(processedFormula, {});
         } catch (e) {
             console.error(`Formula evaluation error: ${formula}`, e);
             return 0;

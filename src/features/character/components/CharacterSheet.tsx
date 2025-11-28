@@ -41,20 +41,112 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
         setResourceValues(initialValues);
     }, [state.resources]);
 
-    // Handle Resource Updates (Ephemeral)
-    const handleResourceUpdate = (updates: { id: string; delta: number }[]) => {
-        setResourceValues(prev => {
-            const next = { ...prev };
-            updates.forEach(({ id, delta }) => {
-                const resource = state.resources.find(r => r.id === id);
-                if (resource) {
-                    const current = next[id] ?? resource.initial;
-                    const newValue = Math.min(resource.max, Math.max(resource.min, current + delta));
-                    next[id] = newValue;
+    // Handle Log Commands (Ephemeral)
+    const handleLogCommand = (log: CharacterLogEntry) => {
+        // If it's a resource update, update local state
+        if (log.type === 'UPDATE_RESOURCE' && log.resourceUpdate) {
+            const { resourceId, type, value, resetTarget } = log.resourceUpdate;
+
+            // Calculate new value for feedback
+            let newValue = 0;
+
+            // Case-insensitive matching
+            const normalizedId = resourceId.toUpperCase(); // HP/MP are usually uppercase
+
+            // Try to find explicit resource (case-insensitive ID OR exact Name match)
+            const resource = state.resources.find(r =>
+                r.id.toLowerCase() === resourceId.toLowerCase() ||
+                r.name === resourceId
+            );
+
+            // Implicit resource handling
+            let resDef = resource;
+            if (!resDef && (normalizedId === 'HP' || normalizedId === 'MP')) {
+                const max = state.derivedStats[normalizedId] || 0;
+                resDef = { id: normalizedId, name: normalizedId, max, min: 0, initial: max };
+            }
+
+            if (resDef) {
+                const current = resourceValues[resDef.id] ?? resDef.initial;
+                newValue = current;
+
+                if (type === 'set' && value !== undefined) {
+                    newValue = value;
+                } else if (type === 'modify' && value !== undefined) {
+                    newValue = current + value;
+                } else if (type === 'reset') {
+                    newValue = resDef.initial;
                 }
+
+                // Clamp
+                newValue = Math.min(resDef.max, Math.max(resDef.min, newValue));
+
+                // Update State
+                setResourceValues(prev => ({
+                    ...prev,
+                    [resDef.id]: newValue
+                }));
+
+                // Add Feedback to History
+                const feedback: RollResult = {
+                    formula: 'Command',
+                    total: newValue,
+                    details: log.description || `Updated ${resDef.name}`,
+                    isCritical: false,
+                    isFumble: false
+                };
+                setRollHistory(prev => [feedback, ...prev]);
+            } else {
+                // Feedback for failure
+                const feedback: RollResult = {
+                    formula: 'Error',
+                    total: 0,
+                    details: `Resource not found: ${resourceId}`,
+                    isCritical: false,
+                    isFumble: false
+                };
+                setRollHistory(prev => [feedback, ...prev]);
+            }
+
+            // onAddLog(log); // Removed: Resource updates are ephemeral session logs
+
+        } else if (log.type === 'RESET_RESOURCES') {
+            setResourceValues(prev => {
+                const next = { ...prev };
+
+                // Reset explicit resources
+                state.resources.forEach(r => {
+                    if (r.resetMode !== 'none') {
+                        next[r.id] = r.initial;
+                    }
+                });
+
+                // Reset implicit HP/MP
+                ['HP', 'MP'].forEach(key => {
+                    const explicit = state.resources.find(r => r.id === key);
+                    if (!explicit) {
+                        const max = state.derivedStats[key] || 0;
+                        next[key] = max;
+                    }
+                });
+
+                return next;
             });
-            return next;
-        });
+
+            // Add Feedback
+            const feedback: RollResult = {
+                formula: 'Command',
+                total: 0,
+                details: log.description || 'Reset All Resources',
+                isCritical: false,
+                isFumble: false
+            };
+            setRollHistory(prev => [feedback, ...prev]);
+
+            // onAddLog(log); // Removed: Resource updates are ephemeral session logs
+        } else if (log.type === 'ROLL' && log.diceRoll) {
+            // Future: Handle ROLL logs if they come through here
+        }
     };
 
     // Calculate Display State (Reactive to Resource Changes)
@@ -108,6 +200,10 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
     // Handle Rolls (Ephemeral)
     const handleRoll = (result: RollResult) => {
         setRollHistory(prev => [result, ...prev]);
+
+        // Also add to persistent log if needed?
+        // The requirement was "Test Dice Roller", so maybe ephemeral is fine.
+        // But wait, the user said "Character Sheet's test dice roller is broken".
     };
 
     // Helper for quick rolls
@@ -201,7 +297,7 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
                         resourceValues={resourceValues}
                         rollHistory={rollHistory}
                         onRoll={handleRoll}
-                        onResourceUpdate={handleResourceUpdate}
+                        onLogCommand={handleLogCommand}
                     />
                 </div>
             </div>

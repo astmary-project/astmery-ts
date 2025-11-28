@@ -13,6 +13,7 @@ describe('DiceRoller', () => {
         customLabels: {},
         customMainStats: [],
         resources: [],
+        resourceValues: {},
         recentRolls: [],
     };
 
@@ -22,12 +23,12 @@ describe('DiceRoller', () => {
     });
 
     it('should replace stats with values', () => {
-        const result = DiceRoller.roll('Body + 5', mockState);
+        const result = DiceRoller.roll('{Body} + 5', mockState);
         expect(result.total).toBe(10); // 5 + 5
     });
 
     it('should replace derived stats', () => {
-        const result = DiceRoller.roll('Attack + 2', mockState);
+        const result = DiceRoller.roll('{Attack} + 2', mockState);
         expect(result.total).toBe(12); // 10 + 2
     });
 
@@ -41,7 +42,7 @@ describe('DiceRoller', () => {
     });
 
     it('should handle complex formulas', () => {
-        const result = DiceRoller.roll('2d6 + Body', mockState);
+        const result = DiceRoller.roll('2d6 + {Body}', mockState);
         expect(result.total).toBeGreaterThanOrEqual(7); // 2 + 5
         expect(result.total).toBeLessThanOrEqual(17); // 12 + 5
     });

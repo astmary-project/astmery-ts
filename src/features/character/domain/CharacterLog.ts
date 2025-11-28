@@ -11,6 +11,8 @@ export type CharacterLogType =
     | 'SPEND_EXP'
     | 'REGISTER_STAT_LABEL'
     | 'REGISTER_RESOURCE'
+    | 'UPDATE_RESOURCE' // New: Resource update
+    | 'RESET_RESOURCES' // New: Reset all resources
     | 'ROLL'; // New: Dice roll
 
 export interface CharacterLogEntry {
@@ -26,6 +28,12 @@ export interface CharacterLogEntry {
     item?: Item;
     skill?: Skill;
     resource?: Resource;
+    resourceUpdate?: {
+        resourceId: string;
+        type: 'set' | 'reset' | 'modify'; // Added modify
+        value?: number; // Required for 'set' and 'modify'
+        resetTarget?: 'initial'; // Required for 'reset'
+    };
     diceRoll?: DiceRoll; // New: Dice roll details
     // Metadata
     description?: string;
@@ -45,6 +53,7 @@ export interface Resource {
     max: number; // For now fixed number, could be formula later
     min: number; // Added: Minimum value (default 0)
     initial: number;
+    resetMode?: 'initial' | 'none'; // Default 'initial'
 }
 
 export interface Skill {
@@ -110,5 +119,6 @@ export interface CharacterState {
     customLabels: Record<string, string>; // From REGISTER_STAT_LABEL logs
     customMainStats: string[]; // Stats promoted to main display order
     resources: Resource[]; // Defined resources
+    resourceValues: Record<string, number>; // Current values of resources
     recentRolls: CharacterLogEntry[]; // Recent roll logs for display
 }

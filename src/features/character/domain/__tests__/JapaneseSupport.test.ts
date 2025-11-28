@@ -16,12 +16,13 @@ describe('Japanese Support', () => {
         customLabels: {},
         customMainStats: [],
         resources: [],
+        resourceValues: {},
         recentRolls: [],
     };
 
     describe('CharacterCalculator', () => {
         it('should normalize Japanese stat names in formulas', () => {
-            const result = CharacterCalculator.evaluateFormula('肉体 + 5', mockState);
+            const result = CharacterCalculator.evaluateFormula('{肉体} + 5', mockState);
             expect(result).toBe(10); // Body(5) + 5
         });
 
@@ -30,7 +31,7 @@ describe('Japanese Support', () => {
                 ...mockState,
                 stats: { ...mockState.stats, 'カルマ': 20 }
             };
-            const result = CharacterCalculator.evaluateFormula('カルマ + 5', stateWithCustom);
+            const result = CharacterCalculator.evaluateFormula('{カルマ} + 5', stateWithCustom);
             expect(result).toBe(25);
         });
 
@@ -39,7 +40,7 @@ describe('Japanese Support', () => {
                 ...mockState,
                 stats: { ...mockState.stats, 'カルマ': 20 }
             };
-            const result = CharacterCalculator.evaluateFormula('肉体 + カルマ', stateWithCustom);
+            const result = CharacterCalculator.evaluateFormula('{肉体} + {カルマ}', stateWithCustom);
             expect(result).toBe(25); // 5 + 20
         });
 
@@ -54,7 +55,7 @@ describe('Japanese Support', () => {
                 name: 'Test Item',
                 type: 'Weapon',
                 description: 'Test Description',
-                dynamicModifiers: { '戦闘能力': '肉体 * 2' } // Should become Combat = Body * 2
+                dynamicModifiers: { '戦闘能力': '{肉体} * 2' } // Should become Combat = Body * 2
             } as Item;
 
             // Manually inject item to test calculation logic
@@ -76,7 +77,7 @@ describe('Japanese Support', () => {
 
     describe('DiceRoller', () => {
         it('should roll with Japanese stat names', () => {
-            const result = DiceRoller.roll('1d1 + 肉体', mockState);
+            const result = DiceRoller.roll('1d1 + {肉体}', mockState);
             expect(result.total).toBe(6); // 1 + 5
         });
 
@@ -85,7 +86,7 @@ describe('Japanese Support', () => {
                 ...mockState,
                 stats: { ...mockState.stats, 'カルマ': 20 }
             };
-            const result = DiceRoller.roll('1d1 + カルマ', stateWithCustom);
+            const result = DiceRoller.roll('1d1 + {カルマ}', stateWithCustom);
             expect(result.total).toBe(21); // 1 + 20
         });
     });

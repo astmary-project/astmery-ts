@@ -32,7 +32,7 @@ describe('CharacterCalculator', () => {
         const state = CharacterCalculator.calculateState(logs);
 
         // HP = (Grade + Body) * 5
-        const hp = CharacterCalculator.evaluateFormula('(Grade + Body) * 5', state);
+        const hp = CharacterCalculator.evaluateFormula('({Grade} + {Body}) * 5', state);
         expect(hp).toBe(30); // (2 + 4) * 5 = 30
     });
 
@@ -43,7 +43,7 @@ describe('CharacterCalculator', () => {
         const state = CharacterCalculator.calculateState(logs);
 
         // sqrt(A) * 2.5
-        const val = CharacterCalculator.evaluateFormula('sqrt(A) * 2.5', state);
+        const val = CharacterCalculator.evaluateFormula('sqrt({A}) * 2.5', state);
         expect(val).toBeCloseTo(Math.sqrt(10) * 2.5);
     });
 
@@ -55,10 +55,10 @@ describe('CharacterCalculator', () => {
 
         // if HP < 10 then 1 else 0
         // mathjs supports ternary operator
-        const result = CharacterCalculator.evaluateFormula('HP < 10 ? 1 : 0', state);
+        const result = CharacterCalculator.evaluateFormula('{HP} < 10 ? 1 : 0', state);
         expect(result).toBe(1);
 
-        const result2 = CharacterCalculator.evaluateFormula('HP > 10 ? 1 : 0', state);
+        const result2 = CharacterCalculator.evaluateFormula('{HP} > 10 ? 1 : 0', state);
         expect(result2).toBe(0);
     });
 
@@ -129,7 +129,7 @@ describe('CharacterCalculator', () => {
                     name: 'Shield',
                     type: 'Armor',
                     description: '',
-                    formulaOverrides: { 'Defense': 'Body * 3' } // Override default Body * 2
+                    formulaOverrides: { 'Defense': '{Body} * 3' } // Override default Body * 2
                 }
             },
             // Skill with additive bonus
@@ -168,7 +168,7 @@ describe('CharacterCalculator', () => {
                     name: 'Muscle Power',
                     type: 'Passive',
                     description: '',
-                    dynamicModifiers: { 'Attack': 'Strength / 2' }
+                    dynamicModifiers: { 'Attack': '{Strength} / 2' }
                 }
             }
         ];
