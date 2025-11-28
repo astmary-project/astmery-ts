@@ -21,21 +21,12 @@ export const STAT_LABELS: Record<string, string> = {
 
 export const STANDARD_STAT_ORDER = [
     'Body',
-    'Agility',
     'Spirit',
-    'Technique',
-    'Intellect',
-    'Luck',
     'Combat',
     'Science',
     'Magic',
     'SpellKnowledge',
-    'Attack',
-    'MagicAttack',
     'ActionSpeed',
-    'Move',
-    'KnowledgeCheck',
-    'GatheringCount',
     'DamageDice',
 ];
 

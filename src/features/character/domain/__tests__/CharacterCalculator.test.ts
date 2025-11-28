@@ -316,12 +316,65 @@ describe('CharacterCalculator Cost Logic', () => {
         // Failure (Retry): 1
         expect(CharacterCalculator.calculateSkillCost(0, 'Grade', true).failure).toBe(1);
 
-        // Free/Standard Skill
+        // Free Skill (Always 0 success cost)
+        expect(CharacterCalculator.calculateSkillCost(0, 'Free').success).toBe(0);
+        expect(CharacterCalculator.calculateSkillCost(10, 'Free').success).toBe(0);
+
+        // Standard Skill (Cost depends on Standard count)
         // Cost: (Current + 1) * 5
-        expect(CharacterCalculator.calculateSkillCost(0, 'Free').success).toBe(5); // (0+1)*5
-        expect(CharacterCalculator.calculateSkillCost(1, 'Free').success).toBe(10); // (1+1)*5
+        expect(CharacterCalculator.calculateSkillCost(0, 'Standard').success).toBe(5); // (0+1)*5
+        expect(CharacterCalculator.calculateSkillCost(1, 'Standard').success).toBe(10); // (1+1)*5
 
         // Failure: 1
-        expect(CharacterCalculator.calculateSkillCost(0, 'Free').failure).toBe(1);
+        expect(CharacterCalculator.calculateSkillCost(0, 'Standard').failure).toBe(1);
+    });
+
+    it('should manage skill wishlist', () => {
+        const state = CharacterCalculator.calculateState([
+            {
+                id: '1',
+                type: 'ADD_WISHLIST_SKILL',
+                timestamp: 100,
+                skill: { id: 's1', name: 'Wish Skill', type: 'Active', description: 'desc' }
+            }
+        ]);
+
+        expect(state.skillWishlist).toHaveLength(1);
+        expect(state.skillWishlist[0].name).toBe('Wish Skill');
+
+        const state2 = CharacterCalculator.calculateState([
+            {
+                id: '1',
+                type: 'ADD_WISHLIST_SKILL',
+                timestamp: 100,
+                skill: { id: 's1', name: 'Wish Skill', type: 'Active', description: 'desc' }
+            },
+            {
+                id: '2',
+                type: 'UPDATE_WISHLIST_SKILL',
+                timestamp: 200,
+                skill: { id: 's1', name: 'Updated Wish Skill', type: 'Active', description: 'desc' }
+            }
+        ]);
+
+        expect(state2.skillWishlist).toHaveLength(1);
+        expect(state2.skillWishlist[0].name).toBe('Updated Wish Skill');
+
+        const state3 = CharacterCalculator.calculateState([
+            {
+                id: '1',
+                type: 'ADD_WISHLIST_SKILL',
+                timestamp: 100,
+                skill: { id: 's1', name: 'Wish Skill', type: 'Active', description: 'desc' }
+            },
+            {
+                id: '3',
+                type: 'REMOVE_WISHLIST_SKILL',
+                timestamp: 300,
+                skill: { id: 's1', name: 'Wish Skill', type: 'Active', description: 'desc' }
+            }
+        ]);
+
+        expect(state3.skillWishlist).toHaveLength(0);
     });
 });

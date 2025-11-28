@@ -1,6 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEffect, useMemo, useState } from 'react';
 
+import { SessionLogEntry } from '../../session/domain/SessionLog';
 import { CharacterCalculator } from '../domain/CharacterCalculator';
 import { CharacterLogEntry, CharacterState, Item, Skill } from '../domain/CharacterLog';
 import { JAPANESE_TO_ENGLISH_STATS } from '../domain/constants';
@@ -47,7 +48,7 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
     }, [state.resources]);
 
     // Handle Log Commands (Ephemeral)
-    const handleLogCommand = (log: CharacterLogEntry) => {
+    const handleLogCommand = (log: SessionLogEntry) => {
         // If it's a resource update, update local state
         if (log.type === 'UPDATE_RESOURCE' && log.resourceUpdate) {
             const { resourceId, type, value, resetTarget } = log.resourceUpdate;
@@ -299,6 +300,7 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
                 onAvatarChange={onAvatarChange}
                 isEditMode={isEditMode}
                 onToggleEditMode={onToggleEditMode}
+                onGrow={handleStatGrowth}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

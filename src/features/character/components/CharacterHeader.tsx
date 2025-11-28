@@ -8,7 +8,9 @@ import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { Pencil } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import { CharacterCalculator } from '../domain/CharacterCalculator';
 import { CharacterState } from '../domain/CharacterLog';
+import { GrowthDialog } from './sheet/GrowthDialog';
 
 interface CharacterHeaderProps {
     name: string;
@@ -21,6 +23,7 @@ interface CharacterHeaderProps {
     onAvatarChange?: (url: string) => void;
     isEditMode?: boolean;
     onToggleEditMode?: () => void;
+    onGrow?: (key: string, cost: number) => void;
 }
 
 export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
@@ -34,9 +37,11 @@ export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
     onAvatarChange,
     isEditMode = false,
     onToggleEditMode,
+    onGrow,
 }) => {
     const [isEditingName, setIsEditingName] = useState(false);
     const [tempName, setTempName] = useState(name);
+    const [showGradeGrowth, setShowGradeGrowth] = useState(false);
 
     useEffect(() => {
         setTempName(name);
@@ -92,9 +97,20 @@ export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
                                 <div className="flex items-center gap-2 group">
                                     <h1 className="text-3xl font-bold tracking-tight">{name}</h1>
                                     {grade !== undefined && (
-                                        <Badge variant="outline" className="text-lg px-3 py-1 border-2">
-                                            Grade {grade}
-                                        </Badge>
+                                        <div className="relative group">
+                                            <Badge variant="outline" className="text-lg px-3 py-1 border-2">
+                                                Grade {grade}
+                                            </Badge>
+                                            {isEditMode && onGrow && (
+                                                <button
+                                                    onClick={() => setShowGradeGrowth(true)}
+                                                    className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-background border border-primary text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors shadow-sm"
+                                                    title="Grow Grade"
+                                                >
+                                                    <span className="text-[10px] font-bold">+</span>
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
                                     {onNameChange && (
                                         <button
@@ -148,6 +164,25 @@ export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
                     </div>
                 </div>
             </CardContent>
+
+            {showGradeGrowth && grade !== undefined && (
+                <GrowthDialog
+                    isOpen={showGradeGrowth}
+                    onClose={() => setShowGradeGrowth(false)}
+                    statKey="Grade"
+                    statLabel="グレード"
+                    currentValue={grade}
+                    currentExp={exp.free}
+                    cost={CharacterCalculator.calculateStatCost(grade, true)}
+                    onConfirm={() => {
+                        if (onGrow) {
+                            const cost = CharacterCalculator.calculateStatCost(grade, true);
+                            onGrow('Grade', cost);
+                            setShowGradeGrowth(false);
+                        }
+                    }}
+                />
+            )}
         </Card>
     );
 };

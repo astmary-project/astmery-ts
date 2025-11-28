@@ -2,7 +2,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import React, { useState } from 'react';
-import { CharacterLogEntry, CharacterState } from '../domain/CharacterLog';
+import { SessionLogEntry } from '../../session/domain/SessionLog';
+import { CharacterState } from '../domain/CharacterLog';
 import { CommandParser } from '../domain/CommandParser';
 import { DiceRoller, RollResult } from '../domain/DiceRoller';
 
@@ -11,7 +12,7 @@ interface DicePanelProps {
     resourceValues: Record<string, number>;
     rollHistory: RollResult[];
     onRoll: (result: RollResult) => void;
-    onLogCommand: (log: CharacterLogEntry) => void;
+    onLogCommand: (log: SessionLogEntry) => void;
 }
 
 export function DicePanel({ state, resourceValues, rollHistory, onRoll, onLogCommand }: DicePanelProps) {

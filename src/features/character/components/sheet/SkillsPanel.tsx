@@ -5,6 +5,7 @@ import { Dices, Plus, Settings2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { CharacterLogEntry, CharacterState, Skill } from '../../domain/CharacterLog';
 import { STANDARD_CHECK_FORMULAS } from '../../domain/constants';
+import { SkillAcquisitionDialog } from './SkillAcquisitionDialog';
 import { SkillEditorDialog } from './SkillEditorDialog';
 
 interface SkillsPanelProps {
@@ -17,7 +18,8 @@ interface SkillsPanelProps {
 }
 
 export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAddSkill, onUpdateSkill }: SkillsPanelProps) => {
-    const [editingSkill, setEditingSkill] = useState<{ skill: Partial<Skill>; mode: 'add' | 'edit' } | null>(null);
+    const [editingSkill, setEditingSkill] = useState<{ skill: Partial<Skill>; mode: 'add' | 'edit' | 'wishlist_add' | 'wishlist_edit' } | null>(null);
+    const [acquiringSkill, setAcquiringSkill] = useState<Skill | null>(null);
 
     const handleAddClick = () => {
         setEditingSkill({ skill: {}, mode: 'add' });
@@ -32,8 +34,49 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
             onAddSkill({ ...skill, id: crypto.randomUUID() } as Skill);
         } else if (editingSkill?.mode === 'edit' && onUpdateSkill) {
             onUpdateSkill(skill as Skill);
+        } else if (editingSkill?.mode === 'wishlist_add') {
+            onAddLog({
+                type: 'ADD_WISHLIST_SKILL',
+                skill: { ...skill, id: crypto.randomUUID() } as Skill,
+                description: `Added to wishlist: ${skill.name}`
+            });
+        } else if (editingSkill?.mode === 'wishlist_edit') {
+            onAddLog({
+                type: 'UPDATE_WISHLIST_SKILL',
+                skill: skill as Skill,
+                description: `Updated wishlist skill: ${skill.name}`
+            });
         }
         setEditingSkill(null);
+    };
+
+    const handleConfirmAcquisition = (cost: number, isSuccess: boolean, type: 'Free' | 'Standard' | 'Grade') => {
+        if (!acquiringSkill) return;
+
+        // 1. Deduct EXP (if cost > 0)
+        if (cost > 0) {
+            onAddLog({
+                type: 'SPEND_EXP',
+                value: cost,
+                description: isSuccess
+                    ? `Spent ${cost} EXP to acquire skill from wishlist: ${acquiringSkill.name}`
+                    : `Spent ${cost} EXP on failed attempt for: ${acquiringSkill.name}`
+            });
+        }
+
+        // 2. Add Skill (if success)
+        if (isSuccess && onAddSkill) {
+            onAddSkill({ ...acquiringSkill, acquisitionType: type });
+
+            // 3. Remove from Wishlist
+            onAddLog({
+                type: 'REMOVE_WISHLIST_SKILL',
+                skill: acquiringSkill,
+                description: `Acquired from wishlist: ${acquiringSkill.name}`
+            });
+        }
+
+        setAcquiringSkill(null);
     };
 
     const handleAcquireSkill = (skill: Partial<Skill>, cost: number, isSuccess: boolean) => {
@@ -223,6 +266,68 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                     </div>
                 </div>
 
+                {/* Wishlist Section */}
+                {state.skillWishlist && state.skillWishlist.length > 0 && (
+                    <div className="mb-8 border-b pb-6">
+                        <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 text-primary">
+                            ほしいものリスト (Wishlist)
+                            <span className="text-xs font-normal text-primary-foreground bg-primary px-2 py-0.5 rounded-full">
+                                {state.skillWishlist.length}
+                            </span>
+                        </h3>
+                        <div className="grid gap-3">
+                            {state.skillWishlist.map(skill => (
+                                <div key={skill.id} className="p-3 border rounded-lg bg-card/50 hover:bg-accent/5 transition-colors group relative border-dashed border-primary/30">
+                                    {/* Actions */}
+                                    <div className="absolute top-4 right-4 flex gap-2">
+                                        <Button
+                                            size="sm"
+                                            onClick={() => setAcquiringSkill(skill)}
+                                            className="h-8"
+                                        >
+                                            習得する
+                                        </Button>
+                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                                onClick={() => setEditingSkill({ skill, mode: 'wishlist_edit' })}
+                                            >
+                                                <Settings2 size={16} />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                onClick={() => onAddLog({
+                                                    type: 'REMOVE_WISHLIST_SKILL',
+                                                    skill: skill,
+                                                    description: `Removed from wishlist: ${skill.name}`
+                                                })}
+                                            >
+                                                <Trash2 size={16} />
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-between items-start mb-1 pr-32">
+                                        <div className="font-medium flex items-center gap-2 flex-wrap">
+                                            {skill.name}
+                                            <Badge variant="outline" className="text-[10px] h-5">
+                                                {SKILL_TYPE_LABELS[skill.type] || skill.type}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                    <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap mt-1">
+                                        {skill.description}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Dynamically render skill sections based on types present */}
                 {(() => {
                     // Get all unique types and sort them (Standard types first)
@@ -251,6 +356,9 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                         <Button className="w-full" variant="outline" onClick={handleAddClick}>
                             <Plus className="mr-2 h-4 w-4" /> スキルを追加
                         </Button>
+                        <Button className="w-full mt-2" variant="ghost" onClick={() => setEditingSkill({ skill: {}, mode: 'wishlist_add' })}>
+                            <Plus className="mr-2 h-4 w-4" /> ほしいものリストに追加
+                        </Button>
                     </div>
                 )}
 
@@ -262,7 +370,17 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                         onSave={handleSaveSkill}
                         onAcquire={handleAcquireSkill}
                         mode={editingSkill.mode}
-                        currentFreeSkills={state.skills.filter(s => s.acquisitionType === 'Free').length}
+                        currentStandardSkills={state.skills.filter(s => s.acquisitionType === 'Standard' || !s.acquisitionType).length}
+                    />
+                )}
+
+                {acquiringSkill && (
+                    <SkillAcquisitionDialog
+                        isOpen={!!acquiringSkill}
+                        onClose={() => setAcquiringSkill(null)}
+                        skill={acquiringSkill}
+                        onConfirm={handleConfirmAcquisition}
+                        currentStandardSkills={state.skills.filter(s => s.acquisitionType === 'Standard' || !s.acquisitionType).length}
                     />
                 )}
             </CardContent>

@@ -13,10 +13,10 @@ export type CharacterLogType =
     | 'SPEND_EXP'
     | 'REGISTER_STAT_LABEL'
     | 'REGISTER_RESOURCE'
-    | 'UPDATE_RESOURCE' // New: Resource update
-    | 'RESET_RESOURCES' // New: Reset all resources
-    | 'ROLL' // New: Dice roll
-    | 'GROW_STAT'; // New: Stat growth
+    | 'GROW_STAT' // New: Stat growth
+    | 'ADD_WISHLIST_SKILL' // New: Add to wishlist
+    | 'REMOVE_WISHLIST_SKILL' // New: Remove from wishlist
+    | 'UPDATE_WISHLIST_SKILL'; // New: Update wishlist skill
 
 export interface CharacterLogEntry {
     id: string;
@@ -31,13 +31,6 @@ export interface CharacterLogEntry {
     item?: Item;
     skill?: Skill;
     resource?: Resource;
-    resourceUpdate?: {
-        resourceId: string;
-        type: 'set' | 'reset' | 'modify'; // Added modify
-        value?: number; // Required for 'set' and 'modify'
-        resetTarget?: 'initial'; // Required for 'reset'
-    };
-    diceRoll?: DiceRoll; // New: Dice roll details
     statGrowth?: {
         key: string;
         value: number;
@@ -117,6 +110,7 @@ export interface CharacterState {
     tags: Set<string>;
     equipment: Item[]; // Changed from Set<string> to Item[] to store full data
     skills: Skill[];   // Changed from Set<string> to Skill[]
+    skillWishlist: Skill[]; // New: Planned skills
     exp: {
         total: number;
         used: number;

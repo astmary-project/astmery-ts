@@ -14,8 +14,8 @@ interface SkillEditorDialogProps {
     initialSkill?: Partial<Skill>;
     onSave: (skill: Partial<Skill>) => void;
     onAcquire?: (skill: Partial<Skill>, cost: number, isSuccess: boolean) => void;
-    mode: 'add' | 'edit';
-    currentFreeSkills?: number;
+    mode: 'add' | 'edit' | 'wishlist_add' | 'wishlist_edit';
+    currentStandardSkills?: number;
 }
 
 export const SkillEditorDialog: React.FC<SkillEditorDialogProps> = ({
@@ -25,7 +25,7 @@ export const SkillEditorDialog: React.FC<SkillEditorDialogProps> = ({
     onSave,
     onAcquire,
     mode,
-    currentFreeSkills = 0
+    currentStandardSkills = 0
 }) => {
     const [skill, setSkill] = useState<Partial<Skill>>({
         name: '',
@@ -98,22 +98,24 @@ export const SkillEditorDialog: React.FC<SkillEditorDialogProps> = ({
                         </div>
                     </div>
 
-                    <div className="grid gap-2">
-                        <Label>習得種別</Label>
-                        <Select
-                            value={skill.acquisitionType || 'Standard'}
-                            onValueChange={(val) => handleChange('acquisitionType', val)}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="習得種別" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Free">無料習得 (初期作成など)</SelectItem>
-                                <SelectItem value="Standard">自由習得 (EXP消費)</SelectItem>
-                                <SelectItem value="Grade">グレード習得 (自動)</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    {!mode.includes('wishlist') && (
+                        <div className="grid gap-2">
+                            <Label>習得種別</Label>
+                            <Select
+                                value={skill.acquisitionType || 'Standard'}
+                                onValueChange={(val) => handleChange('acquisitionType', val)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="習得種別" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Free">無料習得 (初期作成など)</SelectItem>
+                                    <SelectItem value="Standard">自由習得 (EXP消費)</SelectItem>
+                                    <SelectItem value="Grade">グレード習得 (自動)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
 
                     <div className="grid gap-2">
                         <Label>概要 (フレーバーテキスト)</Label>
@@ -165,13 +167,11 @@ export const SkillEditorDialog: React.FC<SkillEditorDialogProps> = ({
                 <DialogFooter className="sm:justify-between gap-2">
                     <Button variant="outline" onClick={onClose}>キャンセル</Button>
 
-                    {mode === 'edit' ? (
-                        <Button onClick={handleSave}>保存</Button>
-                    ) : (
+                    {mode === 'add' ? (
                         <div className="flex gap-2 w-full sm:w-auto justify-end">
                             {(() => {
                                 const type = (skill.acquisitionType as 'Free' | 'Standard' | 'Grade') || 'Standard';
-                                const costs = CharacterCalculator.calculateSkillCost(currentFreeSkills, type);
+                                const costs = CharacterCalculator.calculateSkillCost(currentStandardSkills, type);
 
                                 if (type === 'Grade') {
                                     return (
@@ -211,6 +211,10 @@ export const SkillEditorDialog: React.FC<SkillEditorDialogProps> = ({
                                 }
                             })()}
                         </div>
+                    ) : (
+                        <Button onClick={handleSave}>
+                            {mode === 'wishlist_add' ? 'リストに追加' : '保存'}
+                        </Button>
                     )}
                 </DialogFooter>
             </DialogContent>

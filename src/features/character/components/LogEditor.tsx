@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import React, { useState } from 'react';
 import { CharacterLogEntry, CharacterLogType } from '../domain/CharacterLog';
 import { CharacterLogFactory } from '../domain/CharacterLogFactory';
-import { STANDARD_STAT_ORDER, STAT_LABELS } from '../domain/constants';
+import { ABILITY_STATS, STAT_LABELS } from '../domain/constants';
 
 interface LogEditorProps {
     onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
@@ -148,7 +148,7 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {STANDARD_STAT_ORDER.map(key => (
+                                            {ABILITY_STATS.map(key => (
                                                 <SelectItem key={key} value={key}>
                                                     {STAT_LABELS[key] || key}
                                                 </SelectItem>

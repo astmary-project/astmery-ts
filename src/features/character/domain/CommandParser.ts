@@ -1,14 +1,14 @@
-import { CharacterLogEntry } from './CharacterLog';
+import { SessionLogEntry } from '../../session/domain/SessionLog';
 
 export class CommandParser {
     /**
-     * Parses a command string into a CharacterLogEntry.
+     * Parses a command string into a SessionLogEntry.
      * Supported commands:
      * - :Resource=value (Set resource value)
      * - :Resource=reset (Reset resource to initial/max)
      * - :reset (Reset all resources)
      */
-    public static parse(command: string, timestamp: number = Date.now()): CharacterLogEntry | null {
+    public static parse(command: string, timestamp: number = Date.now()): SessionLogEntry | null {
         const trimmed = command.trim();
 
         // 1. Reset All Command (:reset or :rest)
