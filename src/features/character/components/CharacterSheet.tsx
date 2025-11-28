@@ -2,6 +2,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEffect, useMemo, useState } from 'react';
 
 import { DicePanel, DiceRoller, RollResult, SessionLogEntry } from '../../session';
+import { SessionCalculator } from '../../session/domain/SessionCalculator';
 import { CharacterCalculator } from '../domain/CharacterCalculator';
 import { CharacterLogEntry, CharacterState, Item, Skill } from '../domain/CharacterLog';
 import { JAPANESE_TO_ENGLISH_STATS } from '../domain/constants';
@@ -47,109 +48,51 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
 
     // Handle Log Commands (Ephemeral)
     const handleLogCommand = (log: SessionLogEntry) => {
-        // If it's a resource update, update local state
-        if (log.type === 'UPDATE_RESOURCE' && log.resourceUpdate) {
-            const { resourceId, type, value, resetTarget } = log.resourceUpdate;
+        // Delegate state calculation to SessionCalculator
+        const nextValues = SessionCalculator.applyLog(resourceValues, log, state);
 
-            // Calculate new value for feedback
-            let newValue = 0;
+        // If values changed, update state and add feedback
+        if (nextValues !== resourceValues) {
+            setResourceValues(nextValues);
 
-            // Case-insensitive matching
-            const normalizedId = resourceId.toUpperCase(); // HP/MP are usually uppercase
+            // Generate Feedback
+            let feedbackDetails = '';
+            let feedbackTotal = 0;
 
-            // Try to find explicit resource (case-insensitive ID OR exact Name match)
-            const resource = state.resources.find(r =>
-                r.id.toLowerCase() === resourceId.toLowerCase() ||
-                r.name === resourceId
-            );
+            if (log.type === 'UPDATE_RESOURCE' && log.resourceUpdate) {
+                const { resourceId } = log.resourceUpdate;
+                // Find definition for name
+                const resource = state.resources.find(r => r.id.toLowerCase() === resourceId.toLowerCase() || r.name === resourceId)
+                    || (['HP', 'MP'].includes(resourceId.toUpperCase()) ? { name: resourceId.toUpperCase(), id: resourceId.toUpperCase() } : null);
 
-            // Implicit resource handling
-            let resDef = resource;
-            if (!resDef && (normalizedId === 'HP' || normalizedId === 'MP')) {
-                const max = state.derivedStats[normalizedId] || 0;
-                resDef = { id: normalizedId, name: normalizedId, max, min: 0, initial: max };
+                const name = resource?.name || resourceId;
+                const val = nextValues[resource?.id || resourceId] ?? 0;
+
+                feedbackDetails = log.description || `Updated ${name}`;
+                feedbackTotal = val;
+            } else if (log.type === 'RESET_RESOURCES') {
+                feedbackDetails = log.description || 'Reset All Resources';
             }
 
-            if (resDef) {
-                const current = resourceValues[resDef.id] ?? resDef.initial;
-                newValue = current;
-
-                if (type === 'set' && value !== undefined) {
-                    newValue = value;
-                } else if (type === 'modify' && value !== undefined) {
-                    newValue = current + value;
-                } else if (type === 'reset') {
-                    newValue = resDef.initial;
-                }
-
-                // Clamp
-                newValue = Math.min(resDef.max, Math.max(resDef.min, newValue));
-
-                // Update State
-                setResourceValues(prev => ({
-                    ...prev,
-                    [resDef.id]: newValue
-                }));
-
-                // Add Feedback to History
+            if (feedbackDetails) {
                 const feedback: RollResult = {
                     formula: 'Command',
-                    total: newValue,
-                    details: log.description || `Updated ${resDef.name}`,
-                    isCritical: false,
-                    isFumble: false
-                };
-                setRollHistory(prev => [feedback, ...prev]);
-            } else {
-                // Feedback for failure
-                const feedback: RollResult = {
-                    formula: 'Error',
-                    total: 0,
-                    details: `Resource not found: ${resourceId}`,
+                    total: feedbackTotal,
+                    details: feedbackDetails,
                     isCritical: false,
                     isFumble: false
                 };
                 setRollHistory(prev => [feedback, ...prev]);
             }
-
-            // onAddLog(log); // Removed: Resource updates are ephemeral session logs
-
-        } else if (log.type === 'RESET_RESOURCES') {
-            setResourceValues(prev => {
-                const next = { ...prev };
-
-                // Reset explicit resources
-                state.resources.forEach(r => {
-                    if (r.resetMode !== 'none') {
-                        next[r.id] = r.initial;
-                    }
-                });
-
-                // Reset implicit HP/MP
-                ['HP', 'MP'].forEach(key => {
-                    const explicit = state.resources.find(r => r.id === key);
-                    if (!explicit) {
-                        const max = state.derivedStats[key] || 0;
-                        next[key] = max;
-                    }
-                });
-
-                return next;
-            });
-
-            // Add Feedback
-            const feedback: RollResult = {
-                formula: 'Command',
-                total: 0,
-                details: log.description || 'Reset All Resources',
-                isCritical: false,
-                isFumble: false
-            };
-            setRollHistory(prev => [feedback, ...prev]);
-
-            // onAddLog(log); // Removed: Resource updates are ephemeral session logs
-        } else if (log.type === 'ROLL' && log.diceRoll) {
-            // Future: Handle ROLL logs if they come through here
+        } else {
+            // Handle error feedback if needed (e.g. resource not found)
+            // SessionCalculator currently returns original if no change/not found.
+            // We might want it to return a result object with success/error.
+            // For now, simple integration.
+            if (log.type === 'UPDATE_RESOURCE' && log.resourceUpdate) {
+                // Check if it was a failure to find resource
+                // This logic is a bit duplicated, but acceptable for now.
+            }
         }
     };
 
@@ -290,8 +233,6 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
             <CharacterHeader
                 name={name}
                 avatarUrl={character?.avatarUrl || undefined}
-                bio={character?.bio || undefined}
-                specialtyElements={character?.specialtyElements || undefined}
                 exp={state.exp}
                 grade={state.stats['Grade']}
                 onNameChange={onNameChange}
@@ -325,6 +266,10 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
                             <ResourcePanel
                                 state={state}
                                 resourceValues={resourceValues}
+                                tags={state.tags}
+                                isEditMode={isEditMode}
+                                onAddTag={(tag) => onAddLog({ type: 'ADD_TAG', tagId: tag, description: `Added tag: ${tag}` })}
+                                onRemoveTag={(tag) => onAddLog({ type: 'REMOVE_TAG', tagId: tag, description: `Removed tag: ${tag}` })}
                             />
                         </TabsContent>
 

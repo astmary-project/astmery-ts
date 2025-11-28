@@ -1,30 +1,41 @@
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { X } from 'lucide-react';
+import React, { useState } from 'react';
 import { CharacterState } from '../../domain/CharacterLog';
 
 interface ResourcePanelProps {
     state: CharacterState;
     resourceValues: Record<string, number>;
+    // New props for Status
+    tags?: Set<string>;
+    isEditMode?: boolean;
+    onAddTag?: (tag: string) => void;
+    onRemoveTag?: (tag: string) => void;
 }
 
-export const ResourcePanel = ({ state, resourceValues }: ResourcePanelProps) => {
+export const ResourcePanel = ({ state, resourceValues, tags, isEditMode = false, onAddTag, onRemoveTag }: ResourcePanelProps) => {
+    // Tag State
+    const [newTag, setNewTag] = useState('');
+
+    const handleAddTag = () => {
+        if (newTag.trim() && onAddTag) {
+            onAddTag(newTag.trim());
+            setNewTag('');
+        }
+    };
+
+    const handleTagKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleAddTag();
+        }
+    };
+
     return (
         <div className="space-y-4">
-            <Card>
-                <CardHeader>
-                    <CardTitle>タグ・状態</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                        {Array.from(state.tags).map(tag => (
-                            <span key={tag} className="px-2 py-1 bg-primary/10 text-primary rounded text-sm border border-primary/20">
-                                {tag}
-                            </span>
-                        ))}
-                        {state.tags.size === 0 && <span className="text-muted-foreground italic">なし</span>}
-                    </div>
-                </CardContent>
-            </Card>
-
             {state.resources.length > 0 && (
                 <Card>
                     <CardHeader>
@@ -47,6 +58,47 @@ export const ResourcePanel = ({ state, resourceValues }: ResourcePanelProps) => 
                     </CardContent>
                 </Card>
             )}
+
+            {/* Status (Tags) */}
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-base">状態 (Status)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                        {tags && Array.from(tags).map((tag) => (
+                            <Badge key={tag} variant="secondary" className="text-sm py-1 px-3">
+                                {tag}
+                                {isEditMode && onRemoveTag && (
+                                    <button
+                                        onClick={() => onRemoveTag(tag)}
+                                        className="ml-2 hover:text-destructive focus:outline-none"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                )}
+                            </Badge>
+                        ))}
+                        {(!tags || tags.size === 0) && !isEditMode && (
+                            <span className="text-muted-foreground text-sm">状態異常なし</span>
+                        )}
+                    </div>
+
+                    {isEditMode && onAddTag && (
+                        <div className="flex gap-2 max-w-sm mt-4">
+                            <Input
+                                value={newTag}
+                                onChange={(e) => setNewTag(e.target.value)}
+                                onKeyDown={handleTagKeyDown}
+                                placeholder="状態を追加..."
+                            />
+                            <Button onClick={handleAddTag} variant="outline" size="sm">
+                                追加
+                            </Button>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
         </div>
     );
 };

@@ -6,6 +6,7 @@ import { CharacterCalculator } from '../../domain/CharacterCalculator';
 import { CharacterState } from '../../domain/CharacterLog';
 import { STANDARD_STAT_ORDER, STAT_LABELS } from '../../domain/constants';
 import { GrowthDialog } from './GrowthDialog';
+
 interface StatsPanelProps {
     state: CharacterState;
     displayState: CharacterState;
@@ -91,6 +92,8 @@ export const StatsPanel = ({ state, displayState, onRoll, isEditMode = false, on
 
     return (
         <div className="space-y-6">
+
+
             {/* Main Stats */}
             <Card>
                 <CardHeader className="pb-2">

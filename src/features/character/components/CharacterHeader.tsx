@@ -15,8 +15,6 @@ import { GrowthDialog } from './sheet/GrowthDialog';
 interface CharacterHeaderProps {
     name: string;
     avatarUrl?: string;
-    bio?: string;
-    specialtyElements?: string[];
     exp: CharacterState['exp'];
     grade?: number;
     onNameChange?: (name: string) => void;
@@ -29,8 +27,6 @@ interface CharacterHeaderProps {
 export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
     name,
     avatarUrl,
-    bio,
-    specialtyElements = [],
     exp,
     grade,
     onNameChange,
@@ -123,13 +119,6 @@ export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
                                     )}
                                 </div>
                             )}
-                            <div className="flex flex-wrap gap-2">
-                                {specialtyElements.map((el) => (
-                                    <Badge key={el} variant="secondary">
-                                        {el}
-                                    </Badge>
-                                ))}
-                            </div>
                         </div>
 
                         {/* Edit Mode Toggle */}
@@ -147,9 +136,6 @@ export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
                                 </div>
                             </div>
                         )}
-
-                        {/* Bio */}
-                        {bio && <p className="text-muted-foreground mb-4 text-sm whitespace-pre-wrap">{bio}</p>}
 
                         {/* EXP Bar */}
                         <div className="space-y-1">
