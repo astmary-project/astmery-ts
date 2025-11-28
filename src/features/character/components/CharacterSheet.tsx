@@ -1,13 +1,11 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEffect, useMemo, useState } from 'react';
 
-import { SessionLogEntry } from '../../session/domain/SessionLog';
+import { DicePanel, DiceRoller, RollResult, SessionLogEntry } from '../../session';
 import { CharacterCalculator } from '../domain/CharacterCalculator';
 import { CharacterLogEntry, CharacterState, Item, Skill } from '../domain/CharacterLog';
 import { JAPANESE_TO_ENGLISH_STATS } from '../domain/constants';
-import { DiceRoller, RollResult } from '../domain/DiceRoller';
 import { CharacterHeader } from './CharacterHeader';
-import { DicePanel } from './DicePanel';
 import { BioPanel } from './sheet/BioPanel';
 import { EquipmentPanel } from './sheet/EquipmentPanel';
 import { HistoryPanel } from './sheet/HistoryPanel';
@@ -223,7 +221,7 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
             tempState.stats = { ...tempState.stats, [r.name]: val };
         });
 
-        const result = DiceRoller.roll(formula, tempState);
+        const result = DiceRoller.roll(formula, tempState, JAPANESE_TO_ENGLISH_STATS);
 
         // Add description to result details if present
         if (description) {

@@ -1,4 +1,4 @@
-import { SessionLogEntry } from '../../session/domain/SessionLog';
+import { SessionLogEntry } from './SessionLog';
 
 export class CommandParser {
     /**

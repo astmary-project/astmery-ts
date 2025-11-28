@@ -1,6 +1,4 @@
 import { all, create } from 'mathjs';
-import { CharacterState } from './CharacterLog';
-import { JAPANESE_TO_ENGLISH_STATS } from './constants';
 
 const math = create(all, {
     number: 'number',
@@ -15,13 +13,18 @@ export interface RollResult {
     isFumble: boolean;
 }
 
+export interface RollContext {
+    stats: Record<string, number>;
+    derivedStats: Record<string, number>;
+}
+
 export class DiceRoller {
     /**
      * Parses and evaluates a dice formula.
      * Supports standard notation: XdY (e.g., 2d6, 1d100).
      * Replaces XdY with random values and evaluates the expression.
      */
-    public static roll(formula: string, state: CharacterState): RollResult {
+    public static roll(formula: string, context: RollContext, aliases: Record<string, string> = {}): RollResult {
         // 1. Handle Comments
         const [formulaPart, ...commentParts] = formula.split('#');
         const comment = commentParts.join('#').trim();
@@ -33,11 +36,11 @@ export class DiceRoller {
         processedFormula = processedFormula.replace(/\{([^{}]+)\}/g, (match, key) => {
             const trimmedKey = key.trim();
 
-            // Resolve key (handle Japanese aliases)
-            const enKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
+            // Resolve key (handle aliases)
+            const enKey = aliases[trimmedKey] || trimmedKey;
 
-            // Look up in state
-            const val = state.stats[enKey] ?? state.derivedStats[enKey] ?? 0;
+            // Look up in context
+            const val = context.stats[enKey] ?? context.derivedStats[enKey] ?? 0;
             return val.toString();
         });
 

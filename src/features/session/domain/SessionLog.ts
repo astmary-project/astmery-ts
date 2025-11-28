@@ -1,4 +1,4 @@
-import { DiceRoll } from '../../character/domain/CharacterLog';
+import { RollResult } from './DiceRoller';
 
 export type SessionLogType =
     | 'UPDATE_RESOURCE' // Resource update (HP/MP etc)
@@ -20,5 +20,5 @@ export interface SessionLogEntry {
     };
 
     // For ROLL
-    diceRoll?: DiceRoll;
+    diceRoll?: RollResult;
 }

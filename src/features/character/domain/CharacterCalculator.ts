@@ -21,7 +21,6 @@ export class CharacterCalculator {
         customMainStats: [],
         resources: [],
         resourceValues: {},
-        recentRolls: [],
     };
 
     private static readonly DEFAULT_FORMULAS: Record<string, string> = {
@@ -54,7 +53,6 @@ export class CharacterCalculator {
             customMainStats: [],
             resources: [],
             resourceValues: {},
-            recentRolls: [],
         };
 
         // Sort logs by timestamp just in case

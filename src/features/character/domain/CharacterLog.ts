@@ -40,13 +40,7 @@ export interface CharacterLogEntry {
     description?: string;
 }
 
-export interface DiceRoll {
-    formula: string; // e.g. "2d6 + 5"
-    result: number; // e.g. 12
-    details: string; // e.g. "[3, 4] + 5"
-    isCritical?: boolean;
-    isFumble?: boolean;
-}
+
 
 export interface Resource {
     id: string;
@@ -122,5 +116,5 @@ export interface CharacterState {
     customMainStats: string[]; // Stats promoted to main display order
     resources: Resource[]; // Defined resources
     resourceValues: Record<string, number>; // Current values of resources
-    recentRolls: CharacterLogEntry[]; // Recent roll logs for display
+
 }
