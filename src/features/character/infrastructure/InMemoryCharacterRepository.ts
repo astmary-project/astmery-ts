@@ -176,4 +176,10 @@ export class InMemoryCharacterRepository implements ICharacterRepository {
         await new Promise(resolve => setTimeout(resolve, 100));
         return Array.from(this.storage.values());
     }
+
+    async delete(id: string): Promise<void> {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        this.storage.delete(id);
+        console.log(`[InMemoryRepo] Deleted character ${id}`);
+    }
 }
