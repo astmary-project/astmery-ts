@@ -8,12 +8,13 @@ interface HistoryPanelProps {
     logs: CharacterLogEntry[];
     onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
     onDeleteLog: (logId: string) => void;
+    isEditMode?: boolean;
 }
 
-export const HistoryPanel = ({ logs, onAddLog, onDeleteLog }: HistoryPanelProps) => {
+export const HistoryPanel = ({ logs, onAddLog, onDeleteLog, isEditMode }: HistoryPanelProps) => {
     return (
         <div className="space-y-6">
-            <LogEditor onAddLog={onAddLog} />
+            {isEditMode && <LogEditor onAddLog={onAddLog} />}
             <Card>
                 <CardHeader>
                     <CardTitle>History Log</CardTitle>
@@ -36,15 +37,17 @@ export const HistoryPanel = ({ logs, onAddLog, onDeleteLog }: HistoryPanelProps)
                                         {log.type === 'EQUIP' && `Equipped: ${log.item?.name || log.stringValue || 'Unknown'}`}
                                         {log.description && <span className="text-muted-foreground ml-2">- {log.description}</span>}
                                     </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="absolute top-2 right-0 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                                        onClick={() => onDeleteLog(log.id)}
-                                        title="Delete Log"
-                                    >
-                                        <Trash2 className="h-3 w-3" />
-                                    </Button>
+                                    {isEditMode && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="absolute top-2 right-0 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                                            onClick={() => onDeleteLog(log.id)}
+                                            title="Delete Log"
+                                        >
+                                            <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                    )}
                                 </div>
                             ))}
                     </div>

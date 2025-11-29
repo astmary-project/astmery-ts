@@ -1,12 +1,13 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ImageUpload } from '@/components/ui/image-upload';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
-import { ArrowLeft, Pencil } from 'lucide-react';
+import { ArrowLeft, Pencil, Settings } from 'lucide-react';
 import Link from 'next/link';
 import React, { useEffect, useState } from 'react';
 import { CharacterCalculator } from '../domain/CharacterCalculator';
@@ -14,28 +15,41 @@ import { CharacterState } from '../domain/CharacterLog';
 import { GrowthDialog } from './sheet/GrowthDialog';
 
 interface CharacterHeaderProps {
+    character: CharacterState;
     name: string;
-    avatarUrl?: string;
-    exp: CharacterState['exp'];
-    grade?: number;
-    onNameChange?: (name: string) => void;
+    profile?: {
+        avatarUrl?: string;
+        bio?: string;
+        specialtyElements?: string[];
+    };
+    isEditMode: boolean;
+    onEditModeChange: (value: boolean) => void;
     onAvatarChange?: (url: string) => void;
-    isEditMode?: boolean;
-    onToggleEditMode?: () => void;
+    canEdit?: boolean;
     onGrow?: (key: string, cost: number) => void;
+    onNameChange?: (name: string) => void;
+    ownerName?: string;
+    characterId?: string;
 }
 
 export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
+    character,
     name,
-    avatarUrl,
-    exp,
-    grade,
-    onNameChange,
+    profile,
+    isEditMode,
+    onEditModeChange,
     onAvatarChange,
-    isEditMode = false,
-    onToggleEditMode,
+    canEdit = false,
     onGrow,
+    onNameChange,
+    ownerName,
+    characterId,
 }) => {
+    const {
+        exp,
+    } = character;
+    const grade = character.stats['Grade'] || 0;
+
     const [isEditingName, setIsEditingName] = useState(false);
     const [tempName, setTempName] = useState(name);
     const [showGradeGrowth, setShowGradeGrowth] = useState(false);
@@ -65,21 +79,46 @@ export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
             <CardContent className="pt-6">
                 <div className="flex flex-col md:flex-row gap-6 items-start">
                     {/* Back Button */}
-                    <Link href="/character" className="absolute top-4 left-4 text-muted-foreground hover:text-foreground">
+                    <Link href="/character" className="absolute top-4 left-4 text-muted-foreground hover:text-foreground z-10">
                         <ArrowLeft className="w-6 h-6" />
                     </Link>
 
+                    {/* Edit Mode Toggle & Settings */}
+                    {canEdit && (
+                        <div className="absolute top-4 right-4 flex items-center space-x-4 z-10">
+                            {characterId && (
+                                <Link href={`/character/${characterId}/setup`}>
+                                    <Button variant="outline" size="sm" className="h-8">
+                                        <Settings className="mr-2 h-4 w-4" /> 一括編集
+                                    </Button>
+                                </Link>
+                            )}
+
+                            <div className="flex items-center space-x-2">
+                                <Switch
+                                    id="edit-mode"
+                                    checked={isEditMode}
+                                    onCheckedChange={onEditModeChange}
+                                />
+                                <Label htmlFor="edit-mode" className="flex items-center gap-2 cursor-pointer select-none">
+                                    <Pencil className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Edit Mode</span>
+                                </Label>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Avatar */}
-                    {onAvatarChange ? (
+                    {isEditMode && onAvatarChange ? (
                         <ImageUpload
-                            value={avatarUrl}
+                            value={profile?.avatarUrl}
                             onChange={onAvatarChange}
                             className="w-24 h-24 md:w-32 md:h-32 shrink-0"
                         />
                     ) : (
-                        <Avatar className="w-24 h-24 md:w-32 md:h-32 border-4 border-muted">
-                            <AvatarImage src={avatarUrl} alt={name} />
-                            <AvatarFallback className="text-2xl font-bold">{name.slice(0, 2)}</AvatarFallback>
+                        <Avatar className="w-24 h-24 border-4 border-background shadow-sm">
+                            <AvatarImage src={profile?.avatarUrl} />
+                            <AvatarFallback>{name.slice(0, 2)}</AvatarFallback>
                         </Avatar>
                     )}
 
@@ -98,6 +137,11 @@ export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
                             ) : (
                                 <div className="flex items-center gap-2 group">
                                     <h1 className="text-3xl font-bold tracking-tight">{name}</h1>
+                                    {ownerName && (
+                                        <span className="text-sm text-muted-foreground ml-2">
+                                            Player: {ownerName}
+                                        </span>
+                                    )}
                                     {grade !== undefined && (
                                         <div className="relative group">
                                             <Badge variant="outline" className="text-lg px-3 py-1 border-2">
@@ -126,22 +170,6 @@ export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
                                 </div>
                             )}
                         </div>
-
-                        {/* Edit Mode Toggle */}
-                        {onToggleEditMode && (
-                            <div className="flex justify-end mb-2">
-                                <div className="flex items-center space-x-2">
-                                    <Switch
-                                        id="edit-mode"
-                                        checked={isEditMode}
-                                        onCheckedChange={onToggleEditMode}
-                                    />
-                                    <Label htmlFor="edit-mode" className="text-sm font-medium">
-                                        編集モード
-                                    </Label>
-                                </div>
-                            </div>
-                        )}
 
                         {/* EXP Bar */}
                         <div className="space-y-1">

@@ -1,3 +1,4 @@
+import { supabase } from '@/lib/supabase';
 import { useEffect, useMemo, useState } from 'react';
 import { CharacterCalculator } from '../domain/CharacterCalculator';
 import { CharacterLogEntry, CharacterState } from '../domain/CharacterLog';
@@ -29,11 +30,28 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
         return CharacterCalculator.calculateState(logs, {}, sessionContext);
     }, [logs, sessionContext]);
 
+    const [userId, setUserId] = useState<string | undefined>();
+    const [ownerName, setOwnerName] = useState<string | undefined>();
+    const [isAdmin, setIsAdmin] = useState(false);
+
     // Load initial data
     useEffect(() => {
         const load = async () => {
             setIsLoading(true);
             try {
+                // Fetch Current User Role
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    const { data: profile } = await supabase
+                        .from('user_profiles')
+                        .select('role')
+                        .eq('user_id', user.id)
+                        .single();
+                    if (profile?.role === 'admin') {
+                        setIsAdmin(true);
+                    }
+                }
+
                 const data = await repository.load(characterId);
                 if (data) {
                     let currentLogs = data.logs;
@@ -70,8 +88,22 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
 
                     setName(data.name);
                     setLogs(currentLogs);
+                    setUserId(data.userId); // Set userId
                     if (data.profile) {
                         setCharacterProfile(data.profile);
+                    }
+
+                    // Fetch Owner Name
+                    if (data.userId) {
+                        const { data: profile } = await supabase
+                            .from('user_profiles')
+                            .select('display_name')
+                            .eq('user_id', data.userId)
+                            .single();
+
+                        if (profile?.display_name) {
+                            setOwnerName(profile.display_name);
+                        }
                     }
                 } else {
                     // Initialize with empty or default if not found (for demo)
@@ -107,7 +139,8 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
                 id: characterId,
                 name: name,
                 logs: currentLogs,
-                profile: profile
+                profile: profile,
+                userId: userId // Pass userId to save (though repository might not need it if it's already in DB, but good for consistency)
             });
         } catch (e) {
             console.error('Failed to save', e);
@@ -148,6 +181,18 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
         await save(name, newLogs, characterProfile);
     };
 
+    const deleteCharacter = async () => {
+        try {
+            await repository.delete(characterId);
+            // Redirect will be handled by the component or router
+            return true;
+        } catch (e) {
+            console.error('Failed to delete character', e);
+            setError('Failed to delete character');
+            return false;
+        }
+    };
+
     const [isEditMode, setIsEditMode] = useState(false);
 
     return {
@@ -164,6 +209,10 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
         deleteLog,
         updateProfile,
         updateCharacter,
-        reload: () => window.location.reload() // Temp
+        reload: () => window.location.reload(), // Temp
+        userId, // Return userId
+        ownerName, // Return ownerName
+        isAdmin, // Return isAdmin
+        deleteCharacter // Return deleteCharacter
     };
 };

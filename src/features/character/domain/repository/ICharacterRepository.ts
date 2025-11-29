@@ -12,12 +12,15 @@ export interface CharacterData {
         bio?: string;
         specialtyElements?: string[];
     };
+    userId?: string;
+    ownerName?: string;
 }
 
 export interface ICharacterRepository {
     save(character: CharacterData): Promise<void>;
     load(id: string): Promise<CharacterData | null>;
     listAll(): Promise<CharacterData[]>;
+    delete(id: string): Promise<void>;
     // In a real app, we might have methods to append logs specifically
     // appendLog(characterId: string, log: CharacterLogEntry): Promise<void>;
 }

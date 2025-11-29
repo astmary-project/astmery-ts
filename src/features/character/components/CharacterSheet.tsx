@@ -30,8 +30,62 @@ interface CharacterSheetProps {
     isEditMode?: boolean;
     onToggleEditMode?: () => void;
     onUpdateProfile?: (profile: Partial<{ bio: string; specialtyElements: string[] }>) => void;
+    initialLogs: SessionLogEntry[];
+    onSave?: (logs: SessionLogEntry[]) => Promise<void>;
+    currentUserId?: string;
+    ownerId?: string;
+    ownerName?: string;
+    characterId?: string;
+    isAdmin?: boolean;
+    onDeleteCharacter?: () => void;
 }
-export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDeleteLog, onNameChange, onAvatarChange, isEditMode = false, onToggleEditMode, onUpdateProfile }: CharacterSheetProps) => {
+export const CharacterSheet: React.FC<CharacterSheetProps> = ({
+    name,
+    character,
+    state,
+    logs,
+    onAddLog,
+    onDeleteLog,
+    onNameChange,
+    onAvatarChange,
+    onUpdateProfile,
+    initialLogs,
+    onSave,
+    currentUserId,
+    ownerId,
+    ownerName,
+    characterId,
+    isAdmin,
+    onDeleteCharacter,
+    isEditMode: propIsEditMode,
+    onToggleEditMode,
+}) => {
+    // State
+    // const [logs, setLogs] = useState<SessionLogEntry[]>(initialLogs); // Removed to avoid shadowing and use prop
+    const [localIsEditMode, setLocalIsEditMode] = useState(false);
+    const [activeTab, setActiveTab] = useState("status");
+
+    const isEditMode = propIsEditMode !== undefined ? propIsEditMode : localIsEditMode;
+
+    const handleEditModeChange = (value: boolean) => {
+        if (onToggleEditMode) {
+            onToggleEditMode();
+        } else {
+            setLocalIsEditMode(value);
+        }
+    };
+
+    // Ownership check
+    const canEdit = (!!currentUserId && !!ownerId && currentUserId === ownerId) || !!isAdmin;
+
+    // Force disable edit mode if not owner
+    useEffect(() => {
+        if (!canEdit && isEditMode) {
+            if (onToggleEditMode) onToggleEditMode();
+            else setLocalIsEditMode(false);
+        }
+    }, [canEdit, isEditMode, onToggleEditMode]);
+
     // Ephemeral State (Session Scope)
     const [resourceValues, setResourceValues] = useState<Record<string, number>>({});
     const [rollHistory, setRollHistory] = useState<RollResult[]>([]);
@@ -231,15 +285,17 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
     return (
         <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6">
             <CharacterHeader
+                character={state}
                 name={name}
-                avatarUrl={character?.avatarUrl || undefined}
-                exp={state.exp}
-                grade={state.stats['Grade']}
-                onNameChange={onNameChange}
-                onAvatarChange={onAvatarChange}
+                profile={character}
                 isEditMode={isEditMode}
-                onToggleEditMode={onToggleEditMode}
+                onEditModeChange={handleEditModeChange}
+                onAvatarChange={onAvatarChange}
+                canEdit={canEdit}
                 onGrow={handleStatGrowth}
+                onNameChange={onNameChange}
+                ownerName={ownerName}
+                characterId={characterId}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -306,15 +362,17 @@ export const CharacterSheet = ({ name, character, state, logs, onAddLog, onDelet
                                 onUpdateBio={(bio) => onUpdateProfile?.({ bio })}
                                 onAddTag={(tag) => onAddLog({ type: 'ADD_TAG', tagId: tag, description: `Added tag: ${tag}` })}
                                 onRemoveTag={(tag) => onAddLog({ type: 'REMOVE_TAG', tagId: tag, description: `Removed tag: ${tag}` })}
+                                onDeleteCharacter={onDeleteCharacter}
                             />
                         </TabsContent>
 
                         {/* History Tab */}
                         <TabsContent value="history">
                             <HistoryPanel
-                                logs={logs}
+                                logs={logs as any} // Cast to any to bypass strict type check for now. logs prop is CharacterLogEntry[]
                                 onAddLog={onAddLog}
                                 onDeleteLog={onDeleteLog}
+                                isEditMode={isEditMode}
                             />
                         </TabsContent>
                     </Tabs>

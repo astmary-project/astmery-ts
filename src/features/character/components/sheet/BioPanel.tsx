@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
 interface BioPanelProps {
@@ -13,6 +13,7 @@ interface BioPanelProps {
     onUpdateBio: (bio: string) => void;
     onAddTag: (tag: string) => void;
     onRemoveTag: (tag: string) => void;
+    onDeleteCharacter?: () => void;
 }
 
 export const BioPanel: React.FC<BioPanelProps> = ({
@@ -22,6 +23,7 @@ export const BioPanel: React.FC<BioPanelProps> = ({
     onUpdateBio,
     onAddTag,
     onRemoveTag,
+    onDeleteCharacter,
 }) => {
     const [tempBio, setTempBio] = useState(bio);
     const [newTag, setNewTag] = useState('');
@@ -74,46 +76,77 @@ export const BioPanel: React.FC<BioPanelProps> = ({
                 </CardContent>
             </Card>
 
-            {/* Tags */}
+            {/* Tags Section */}
             <Card>
                 <CardHeader>
-                    <CardTitle>タグ</CardTitle>
+                    <CardTitle>Tags</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="flex flex-wrap gap-2 mb-4">
-                        {Array.from(tags).map((tag) => (
-                            <Badge key={tag} variant="secondary" className="text-sm py-1 px-3">
+                        {Array.from(tags).map(tag => ( // Changed from tags.map to Array.from(tags).map to match original type
+                            <Badge key={tag} variant="secondary" className="flex items-center gap-1">
                                 {tag}
                                 {isEditMode && (
-                                    <button
+                                    <X
+                                        className="h-3 w-3 cursor-pointer hover:text-destructive"
                                         onClick={() => onRemoveTag(tag)}
-                                        className="ml-2 hover:text-destructive focus:outline-none"
-                                    >
-                                        <X className="w-3 h-3" />
-                                    </button>
+                                    />
                                 )}
                             </Badge>
                         ))}
-                        {tags.size === 0 && !isEditMode && (
+                        {tags.size === 0 && !isEditMode && ( // Added back condition for no tags
                             <span className="text-muted-foreground text-sm">タグはありません。</span>
                         )}
                     </div>
-
                     {isEditMode && (
-                        <div className="flex gap-2 max-w-sm">
+                        <div className="flex gap-2 max-w-sm"> {/* Added max-w-sm back */}
                             <Input
+                                placeholder="Add new tag..."
                                 value={newTag}
                                 onChange={(e) => setNewTag(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder="新しいタグ..."
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        handleAddTag();
+                                    }
+                                }}
                             />
-                            <Button onClick={handleAddTag} variant="outline" size="sm">
-                                追加
+                            <Button onClick={handleAddTag} size="sm" variant="outline"> {/* Added variant="outline" back */}
+                                <Plus className="h-4 w-4" />
                             </Button>
                         </div>
                     )}
                 </CardContent>
             </Card>
+
+            {/* Settings */}
+            {isEditMode && onDeleteCharacter && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>設定</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="border border-destructive/50 rounded-md p-4 bg-destructive/5">
+                            <h4 className="text-destructive font-medium mb-2 flex items-center gap-2">
+                                <X className="h-4 w-4" />
+                                Danger Zone
+                            </h4>
+                            <p className="text-sm text-muted-foreground mb-4">
+                                このキャラクターを削除します。この操作は取り消せません。
+                            </p>
+                            <Button
+                                variant="destructive"
+                                onClick={() => {
+                                    if (confirm('本当にこのキャラクターを削除しますか？この操作は取り消せません。')) {
+                                        onDeleteCharacter();
+                                    }
+                                }}
+                            >
+                                キャラクターを削除
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
         </div>
     );
 };

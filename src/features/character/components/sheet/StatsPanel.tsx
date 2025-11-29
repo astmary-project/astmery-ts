@@ -4,7 +4,7 @@ import { Dices } from 'lucide-react';
 import React from 'react';
 import { CharacterCalculator } from '../../domain/CharacterCalculator';
 import { CharacterState } from '../../domain/CharacterLog';
-import { STANDARD_STAT_ORDER, STAT_LABELS } from '../../domain/constants';
+import { ABILITY_STATS, STANDARD_STAT_ORDER, STAT_LABELS } from '../../domain/constants';
 import { GrowthDialog } from './GrowthDialog';
 
 interface StatsPanelProps {
@@ -60,19 +60,6 @@ export const StatsPanel = ({ state, displayState, onRoll, isEditMode = false, on
             >
                 <Dices className="h-4 w-4" />
             </Button>
-
-            {/* Growth Button (Edit Mode) */}
-            {isEditMode && (
-                <Button
-                    variant="outline"
-                    size="icon"
-                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow-sm bg-background border-primary text-primary hover:bg-primary hover:text-primary-foreground z-10"
-                    onClick={() => console.log('Grow', key)} // Placeholder
-                    title="Grow Stat"
-                >
-                    <span className="text-xs font-bold">+</span>
-                </Button>
-            )}
         </div>
     );
 
@@ -118,7 +105,7 @@ export const StatsPanel = ({ state, displayState, onRoll, isEditMode = false, on
                             return (
                                 <div key={key} className="relative">
                                     {renderStatBox(key, label, total, base, mod)}
-                                    {isEditMode && (
+                                    {isEditMode && ABILITY_STATS.includes(key) && (
                                         <Button
                                             variant="outline"
                                             size="icon"

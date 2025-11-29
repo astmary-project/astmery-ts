@@ -1,10 +1,14 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ICharacterRepository } from '@/features/character/domain/repository/ICharacterRepository';
 import { SupabaseCharacterRepository } from '@/features/character/infrastructure/SupabaseCharacterRepository';
-import { Plus } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { Plus, Search, User } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -16,6 +20,11 @@ export default function CharacterListPage() {
     const router = useRouter();
     const [characters, setCharacters] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    // Filter States
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedTag, setSelectedTag] = useState<string>('all');
+    const [selectedOwner, setSelectedOwner] = useState<string>('all');
 
     useEffect(() => {
         const fetchCharacters = async () => {
@@ -32,6 +41,9 @@ export default function CharacterListPage() {
     }, []);
 
     const handleCreateNew = async () => {
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+
         // Create a new empty character and redirect to setup
         const newId = crypto.randomUUID();
         const newCharacter = {
@@ -39,6 +51,7 @@ export default function CharacterListPage() {
             name: '新規キャラクター',
             logs: [],
             profile: {},
+            userId: user?.id // Set userId if logged in
         };
 
         try {
@@ -50,51 +63,152 @@ export default function CharacterListPage() {
         }
     };
 
+    // Extract unique tags and owners
+    const allTags = Array.from(new Set(characters.flatMap(c => {
+        // Extract tags from logs
+        const tags = new Set<string>();
+        c.logs.forEach((log: any) => {
+            if (log.type === 'ADD_TAG') tags.add(log.tagId);
+            if (log.type === 'REMOVE_TAG') tags.delete(log.tagId);
+        });
+        return Array.from(tags);
+    }))).sort();
+
+    const allOwners = Array.from(new Set(characters.map(c => c.ownerName).filter(Boolean))).sort();
+
+    // Filter logic
+    const filteredCharacters = characters.filter(char => {
+        const matchesSearch = char.name.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const charTags = new Set<string>();
+        char.logs.forEach((log: any) => {
+            if (log.type === 'ADD_TAG') charTags.add(log.tagId);
+            if (log.type === 'REMOVE_TAG') charTags.delete(log.tagId);
+        });
+        const matchesTag = selectedTag === 'all' || charTags.has(selectedTag);
+
+        const matchesOwner = selectedOwner === 'all' || char.ownerName === selectedOwner;
+
+        return matchesSearch && matchesTag && matchesOwner;
+    });
+
     if (isLoading) {
         return <div className="p-8 text-center">読み込み中...</div>;
     }
 
     return (
         <div className="container mx-auto py-8 px-4">
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <h1 className="text-3xl font-bold">キャラクター一覧</h1>
                 <Button onClick={handleCreateNew}>
                     <Plus className="mr-2 h-4 w-4" /> 新規作成
                 </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {characters.map((char) => (
-                    <Link key={char.id} href={`/character/${char.id}`} className="block group">
-                        <Card className="h-full transition-colors group-hover:border-primary">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-3">
-                                    {/* Avatar Placeholder */}
-                                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-bold">
-                                        {char.name.slice(0, 2)}
-                                    </div>
-                                    <span className="truncate">{char.name}</span>
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-sm text-muted-foreground line-clamp-3">
-                                    {char.profile?.bio || 'プロフィール未設定'}
-                                </p>
-                                <div className="mt-4 flex flex-wrap gap-1">
-                                    {char.profile?.specialtyElements?.map((el: string) => (
-                                        <span key={el} className="text-xs bg-secondary px-2 py-1 rounded-md">
-                                            {el}
-                                        </span>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </Link>
-                ))}
+            {/* Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="名前で検索..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-8"
+                    />
+                </div>
 
-                {characters.length === 0 && (
+                <Select value={selectedTag} onValueChange={setSelectedTag}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="タグで絞り込み" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">全てのタグ</SelectItem>
+                        {allTags.map(tag => (
+                            <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+
+                <Select value={selectedOwner} onValueChange={setSelectedOwner}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="所有者で絞り込み" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">全ての所有者</SelectItem>
+                        {allOwners.map(owner => (
+                            <SelectItem key={owner as string} value={owner as string}>{owner}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredCharacters.map((char) => {
+                    // Calculate tags for display
+                    const tags = new Set<string>();
+                    char.logs.forEach((log: any) => {
+                        if (log.type === 'ADD_TAG') tags.add(log.tagId);
+                        if (log.type === 'REMOVE_TAG') tags.delete(log.tagId);
+                    });
+                    const displayTags = Array.from(tags);
+
+                    return (
+                        <Link key={char.id} href={`/character/${char.id}`} className="block group">
+                            <Card className="h-full transition-colors group-hover:border-primary flex flex-col">
+                                <CardHeader className="pb-3">
+                                    <div className="flex justify-between items-start gap-2">
+                                        <CardTitle className="flex items-center gap-3 text-lg">
+                                            {/* Avatar Placeholder */}
+                                            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-bold shrink-0">
+                                                {char.name.slice(0, 2)}
+                                            </div>
+                                            <span className="truncate">{char.name}</span>
+                                        </CardTitle>
+                                    </div>
+                                    {char.ownerName && (
+                                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1 ml-14">
+                                            <User className="w-3 h-3" />
+                                            <span>{char.ownerName}</span>
+                                        </div>
+                                    )}
+                                </CardHeader>
+                                <CardContent className="flex-1 flex flex-col">
+                                    <p className="text-sm text-muted-foreground line-clamp-2 mb-4 flex-1">
+                                        {char.profile?.bio || 'プロフィール未設定'}
+                                    </p>
+
+                                    <div className="space-y-2">
+                                        {/* Specialty Elements */}
+                                        {char.profile?.specialtyElements && char.profile.specialtyElements.length > 0 && (
+                                            <div className="flex flex-wrap gap-1">
+                                                {char.profile.specialtyElements.map((el: string) => (
+                                                    <Badge key={el} variant="secondary" className="text-[10px] px-1 py-0 h-5">
+                                                        {el}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Tags */}
+                                        {displayTags.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 pt-2 border-t">
+                                                {displayTags.map((tag) => (
+                                                    <Badge key={tag} variant="outline" className="text-[10px] px-1 py-0 h-5">
+                                                        {tag}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </Link>
+                    );
+                })}
+
+                {filteredCharacters.length === 0 && (
                     <div className="col-span-full text-center py-12 text-muted-foreground">
-                        キャラクターが見つかりません。「新規作成」から作成してください。
+                        条件に一致するキャラクターが見つかりません。
                     </div>
                 )}
             </div>
