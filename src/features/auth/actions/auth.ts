@@ -1,14 +1,16 @@
-'use server';
-
 import { createClient } from '@/lib/supabase-server';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 export async function signInWithGoogle() {
     const supabase = await createClient();
+    const redirectTo = await getRedirectUrl();
+    console.log('[Auth] RedirectTo:', redirectTo); // Debug log
+
     const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            redirectTo: `${getURL()}/auth/callback`,
+            redirectTo: `${redirectTo}/auth/callback`,
         },
     });
 
@@ -22,19 +24,26 @@ export async function signInWithGoogle() {
     }
 }
 
-const getURL = () => {
+async function getRedirectUrl() {
+    const headersList = await headers();
+    const host = headersList.get('x-forwarded-host') || headersList.get('host');
+    const protocol = headersList.get('x-forwarded-proto') || 'https';
+
+    if (host && !host.includes('localhost')) {
+        return `${protocol}://${host}`;
+    }
+
+    // Fallback to Env Vars
     let url =
-        process.env.NEXT_PUBLIC_SITE_URL || // Set this to your site URL in production env.
-        process.env.VERCEL_URL || // Automatically set by Vercel.
-        process.env.NEXT_PUBLIC_VERCEL_URL || // Automatically set by Vercel.
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        process.env.VERCEL_URL ||
+        process.env.NEXT_PUBLIC_VERCEL_URL ||
         'http://localhost:3000';
-    // Make sure to include `https://` when not localhost.
+
     url = url.includes('http') ? url : `https://${url}`;
-    // Make sure to include trailing `/`.
     url = url.charAt(url.length - 1) === '/' ? url : `${url}/`;
-    // Remove trailing slash for consistency with existing code which adds /auth/callback
     return url.replace(/\/$/, '');
-};
+}
 
 export async function signOut() {
     const supabase = await createClient();
