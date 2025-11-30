@@ -18,7 +18,7 @@ const repository: ICharacterRepository = new SupabaseCharacterRepository();
 
 export default function CharacterListPage() {
     const router = useRouter();
-    const [characters, setCharacters] = useState<any[]>([]);
+    const [characters, setCharacters] = useState<import('@/features/character/domain/repository/ICharacterRepository').CharacterData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     // Filter States
@@ -67,9 +67,9 @@ export default function CharacterListPage() {
     const allTags = Array.from(new Set(characters.flatMap(c => {
         // Extract tags from logs
         const tags = new Set<string>();
-        c.logs.forEach((log: any) => {
-            if (log.type === 'ADD_TAG') tags.add(log.tagId);
-            if (log.type === 'REMOVE_TAG') tags.delete(log.tagId);
+        c.logs.forEach((log) => {
+            if (log.type === 'ADD_TAG') tags.add(log.tagId!);
+            if (log.type === 'REMOVE_TAG') tags.delete(log.tagId!);
         });
         return Array.from(tags);
     }))).sort();
@@ -81,9 +81,9 @@ export default function CharacterListPage() {
         const matchesSearch = char.name.toLowerCase().includes(searchTerm.toLowerCase());
 
         const charTags = new Set<string>();
-        char.logs.forEach((log: any) => {
-            if (log.type === 'ADD_TAG') charTags.add(log.tagId);
-            if (log.type === 'REMOVE_TAG') charTags.delete(log.tagId);
+        char.logs.forEach((log) => {
+            if (log.type === 'ADD_TAG') charTags.add(log.tagId!);
+            if (log.type === 'REMOVE_TAG') charTags.delete(log.tagId!);
         });
         const matchesTag = selectedTag === 'all' || charTags.has(selectedTag);
 
@@ -146,9 +146,9 @@ export default function CharacterListPage() {
                 {filteredCharacters.map((char) => {
                     // Calculate tags for display
                     const tags = new Set<string>();
-                    char.logs.forEach((log: any) => {
-                        if (log.type === 'ADD_TAG') tags.add(log.tagId);
-                        if (log.type === 'REMOVE_TAG') tags.delete(log.tagId);
+                    char.logs.forEach((log) => {
+                        if (log.type === 'ADD_TAG') tags.add(log.tagId!);
+                        if (log.type === 'REMOVE_TAG') tags.delete(log.tagId!);
                     });
                     const displayTags = Array.from(tags);
 

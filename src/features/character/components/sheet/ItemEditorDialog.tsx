@@ -30,14 +30,18 @@ export const ItemEditorDialog: React.FC<ItemEditorDialogProps> = ({
 
     useEffect(() => {
         if (isOpen) {
-            setItem({
-                name: '',
-                type: 'Other',
-                description: '',
-                ...initialItem
-            });
+            // Defer update to avoid set-state-in-effect
+            const timer = setTimeout(() => {
+                setItem({
+                    name: '',
+                    type: 'Other',
+                    description: '',
+                    ...initialItem
+                });
+            }, 0);
+            return () => clearTimeout(timer);
         }
-    }, [isOpen, initialItem]);
+    }, [isOpen]); // initialItem intentionally omitted to avoid reset on edit
 
     const handleChange = (field: keyof Item, value: string) => {
         setItem(prev => ({ ...prev, [field]: value }));

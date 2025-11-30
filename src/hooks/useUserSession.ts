@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 export function useUserSession(initialUser: SupabaseUser | null | undefined) {
     const [user, setUser] = useState<SupabaseUser | null | undefined>(initialUser);
     const [profileName, setProfileName] = useState<string | null>(null);
-    const supabase = createClient();
+    const [supabase] = useState(() => createClient());
 
     useEffect(() => {
         // Update user state on mount and auth changes
@@ -43,7 +43,7 @@ export function useUserSession(initialUser: SupabaseUser | null | undefined) {
         });
 
         return () => subscription.unsubscribe();
-    }, []);
+    }, [supabase]);
 
     return { user, profileName };
 }

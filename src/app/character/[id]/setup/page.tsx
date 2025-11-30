@@ -41,61 +41,65 @@ export default function CharacterSetupPage() {
     // Load initial data
     useEffect(() => {
         if (!isLoading && !isInitialized) {
-            setFormData({
-                name: name,
-                bio: character?.bio || '',
-                avatarUrl: character?.avatarUrl || '',
-                stats: { ...state.stats },
-            });
+            // Defer update to avoid set-state-in-effect
+            const timer = setTimeout(() => {
+                setFormData({
+                    name: name,
+                    bio: character?.bio || '',
+                    avatarUrl: character?.avatarUrl || '',
+                    stats: { ...state.stats },
+                });
 
-            // Parse existing specialty elements
-            const elements = (character?.specialtyElements || []).map(el => {
-                const match = el.match(/^(.+)\((.+)\)$/);
-                if (match) {
-                    return { name: match[1], benefit: match[2] };
+                // Parse existing specialty elements
+                const elements = (character?.specialtyElements || []).map(el => {
+                    const match = el.match(/^(.+)\((.+)\)$/);
+                    if (match) {
+                        return { name: match[1], benefit: match[2] };
+                    }
+                    return { name: el, benefit: '' };
+                });
+                if (elements.length === 0) {
+                    elements.push({ name: '', benefit: '' });
                 }
-                return { name: el, benefit: '' };
-            });
-            if (elements.length === 0) {
-                elements.push({ name: '', benefit: '' });
-            }
-            setSpecialtyElements(elements);
+                setSpecialtyElements(elements);
 
-            // Load Skills
-            initialSkillsRef.current = state.skills;
-            setSkills(state.skills.map(s => ({
-                id: s.id,
-                name: s.name,
-                type: s.type,
-                acquisitionType: s.acquisitionType,
-                summary: s.description,
-                effect: s.effect || '', // No fallback
-                restriction: s.restriction || '',
-                timing: s.timing || '',
-                cooldown: s.cooldown || '',
-                target: s.target || '',
-                range: s.range || '',
-                cost: s.cost || '',
-                rollModifier: s.rollModifier || '',
-                magicGrade: s.magicGrade || '',
-                shape: s.shape || '',
-                duration: s.duration || '',
-                activeCheck: s.activeCheck || '',
-                passiveCheck: s.passiveCheck || '',
-                chatPalette: s.chatPalette || '',
-            })));
+                // Load Skills
+                initialSkillsRef.current = state.skills;
+                setSkills(state.skills.map(s => ({
+                    id: s.id,
+                    name: s.name,
+                    type: s.type,
+                    acquisitionType: s.acquisitionType,
+                    summary: s.description,
+                    effect: s.effect || '', // No fallback
+                    restriction: s.restriction || '',
+                    timing: s.timing || '',
+                    cooldown: s.cooldown || '',
+                    target: s.target || '',
+                    range: s.range || '',
+                    cost: s.cost || '',
+                    rollModifier: s.rollModifier || '',
+                    magicGrade: s.magicGrade || '',
+                    shape: s.shape || '',
+                    duration: s.duration || '',
+                    activeCheck: s.activeCheck || '',
+                    passiveCheck: s.passiveCheck || '',
+                    chatPalette: s.chatPalette || '',
+                })));
 
-            // Load Equipment
-            initialEquipmentRef.current = state.equipment;
-            setEquipment(state.equipment.map(i => ({
-                id: i.id,
-                name: i.name,
-                type: i.type as any,
-                summary: i.description,
-                effect: i.effect || '',
-            })));
+                // Load Equipment
+                initialEquipmentRef.current = state.equipment;
+                setEquipment(state.equipment.map(i => ({
+                    id: i.id,
+                    name: i.name,
+                    type: i.type as 'Weapon' | 'Armor' | 'Accessory' | 'Other',
+                    summary: i.description,
+                    effect: i.effect || '',
+                })));
 
-            setIsInitialized(true);
+                setIsInitialized(true);
+            }, 0);
+            return () => clearTimeout(timer);
         }
     }, [isLoading, isInitialized, name, character, state.stats, state.skills, state.equipment]);
 

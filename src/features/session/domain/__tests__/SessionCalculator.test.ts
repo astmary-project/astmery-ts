@@ -5,6 +5,7 @@ import { SessionLogEntry } from '../SessionLog';
 
 describe('SessionCalculator', () => {
     // Mock State Helper
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const createMockState = (resources: any[] = [], derivedStats: Record<string, number> = {}): CharacterState => ({
         stats: {},
         tags: new Set(),

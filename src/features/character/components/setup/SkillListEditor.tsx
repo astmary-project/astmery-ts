@@ -16,8 +16,10 @@ interface SkillListEditorProps {
 export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
     const handleSkillChange = (index: number, field: keyof SkillInput, value: string) => {
         const newSkills = [...skills];
-        // @ts-ignore
-        newSkills[index][field] = value;
+        // Note: Using any for assignment because value is always string but field might be constrained to specific string literals (e.g. acquisitionType).
+        // Since we are validating input in the UI controls (Select, etc.), this safe to cast for generic handler.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (newSkills[index] as any)[field] = value;
         onChange(newSkills);
     };
 
