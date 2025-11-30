@@ -12,7 +12,7 @@ interface EquipmentListEditorProps {
 export function EquipmentListEditor({ equipment, onChange }: EquipmentListEditorProps) {
     const handleEquipmentChange = (index: number, field: keyof ItemInput, value: string) => {
         const newItems = [...equipment];
-        // @ts-ignore
+        // @ts-expect-error TODO: fix type
         newItems[index][field] = value;
         onChange(newItems);
     };
@@ -41,7 +41,7 @@ export function EquipmentListEditor({ equipment, onChange }: EquipmentListEditor
                                 />
                                 <Select
                                     value={item.type}
-                                    onValueChange={v => handleEquipmentChange(index, 'type', v as any)}
+                                    onValueChange={v => handleEquipmentChange(index, 'type', v as "Weapon" | "Armor" | "Accessory" | "Other")}
                                 >
                                     <SelectTrigger className="w-[120px]">
                                         <SelectValue placeholder="種別" />

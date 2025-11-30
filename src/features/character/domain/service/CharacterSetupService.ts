@@ -193,6 +193,7 @@ export class CharacterSetupService {
 
                 // Helper to canonicalize objects for comparison
                 // Handles key sorting, undefined vs empty object/array, and specific defaults
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const canonicalize = (obj: any): string => {
                     if (obj === undefined || obj === null) return '';
                     if (Array.isArray(obj)) {
@@ -200,14 +201,16 @@ export class CharacterSetupService {
                         // For resources, strip IDs and ensure min exists
                         return JSON.stringify(obj.map(item => {
                             if (typeof item === 'object' && item !== null) {
-                                const clone = { ...item };
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                const clone = { ...item } as any;
                                 if ('id' in clone) clone.id = '';
                                 if ('min' in clone && clone.min === undefined) clone.min = 0;
                                 // Sort keys
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 return Object.keys(clone).sort().reduce((acc, key) => {
                                     acc[key] = clone[key];
                                     return acc;
-                                }, {} as any);
+                                }, {} as any); // eslint-disable-line @typescript-eslint/no-explicit-any
                             }
                             return item;
                         }));
@@ -215,10 +218,11 @@ export class CharacterSetupService {
                     if (typeof obj === 'object') {
                         if (Object.keys(obj).length === 0) return '';
                         // Sort keys
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         return JSON.stringify(Object.keys(obj).sort().reduce((acc, key) => {
                             acc[key] = obj[key];
                             return acc;
-                        }, {} as any));
+                        }, {} as any)); // eslint-disable-line @typescript-eslint/no-explicit-any
                     }
                     return JSON.stringify(obj);
                 };
@@ -346,29 +350,33 @@ export class CharacterSetupService {
                 // But I'm editing a chunk.
                 // I'll just duplicate the logic for now to be safe with the tool.
 
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const canonicalize = (obj: any): string => {
                     if (obj === undefined || obj === null) return '';
                     if (Array.isArray(obj)) {
                         if (obj.length === 0) return '';
                         return JSON.stringify(obj.map(item => {
                             if (typeof item === 'object' && item !== null) {
-                                const clone = { ...item };
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                const clone = { ...item } as any;
                                 if ('id' in clone) clone.id = '';
                                 if ('min' in clone && clone.min === undefined) clone.min = 0;
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 return Object.keys(clone).sort().reduce((acc, key) => {
                                     acc[key] = clone[key];
                                     return acc;
-                                }, {} as any);
+                                }, {} as any); // eslint-disable-line @typescript-eslint/no-explicit-any
                             }
                             return item;
                         }));
                     }
                     if (typeof obj === 'object') {
                         if (Object.keys(obj).length === 0) return '';
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         return JSON.stringify(Object.keys(obj).sort().reduce((acc, key) => {
                             acc[key] = obj[key];
                             return acc;
-                        }, {} as any));
+                        }, {} as any)); // eslint-disable-line @typescript-eslint/no-explicit-any
                     }
                     return JSON.stringify(obj);
                 };

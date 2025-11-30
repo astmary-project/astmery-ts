@@ -16,7 +16,7 @@ interface SkillListEditorProps {
 export function SkillListEditor({ skills, onChange }: SkillListEditorProps) {
     const handleSkillChange = (index: number, field: keyof SkillInput, value: string) => {
         const newSkills = [...skills];
-        // @ts-ignore
+        // @ts-expect-error TODO: fix type
         newSkills[index][field] = value;
         onChange(newSkills);
     };

@@ -10,9 +10,9 @@ interface CustomStatEditorProps {
 }
 
 export function CustomStatEditor({ stats, onChange }: CustomStatEditorProps) {
-    const handleCustomStatChange = (index: number, field: keyof CustomStatInput, value: any) => {
+    const handleCustomStatChange = (index: number, field: keyof CustomStatInput, value: string | boolean) => {
         const newStats = [...stats];
-        // @ts-ignore
+        // @ts-expect-error TODO: fix type
         newStats[index][field] = value;
         onChange(newStats);
     };
