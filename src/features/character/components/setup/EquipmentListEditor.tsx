@@ -12,8 +12,9 @@ interface EquipmentListEditorProps {
 export function EquipmentListEditor({ equipment, onChange }: EquipmentListEditorProps) {
     const handleEquipmentChange = (index: number, field: keyof ItemInput, value: string) => {
         const newItems = [...equipment];
-        // @ts-expect-error TODO: fix type
-        newItems[index][field] = value;
+        // Note: Using any for assignment because value is always string but field might be constrained to specific string literals (e.g. type).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (newItems[index] as any)[field] = value;
         onChange(newItems);
     };
 

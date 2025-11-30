@@ -12,8 +12,9 @@ interface CustomStatEditorProps {
 export function CustomStatEditor({ stats, onChange }: CustomStatEditorProps) {
     const handleCustomStatChange = (index: number, field: keyof CustomStatInput, value: string | boolean) => {
         const newStats = [...stats];
-        // @ts-expect-error TODO: fix type
-        newStats[index][field] = value;
+        // Note: Using any for assignment because value is union type but field is specific type.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (newStats[index] as any)[field] = value;
         onChange(newStats);
     };
 

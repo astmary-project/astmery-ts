@@ -248,7 +248,7 @@ describe('CharacterCalculator', () => {
             },
             {
                 id: '2', type: 'UPDATE_SKILL', timestamp: 200,
-                skill: { id: 'skill-1', name: 'Fireball II', description: 'Big Boom' } as unknown as import('../CharacterLog').Skill
+                skill: { id: 'skill-1', name: 'Fireball II', description: 'Big Boom', type: 'Spell' }
             }
         ];
 
@@ -267,7 +267,7 @@ describe('CharacterCalculator', () => {
             },
             {
                 id: '2', type: 'UPDATE_ITEM', timestamp: 200,
-                item: { id: 'item-1', name: 'Sword +1', roll: '2d6+1' } as unknown as import('../CharacterLog').Item
+                item: { id: 'item-1', name: 'Sword +1', roll: '2d6+1', type: 'Weapon', description: '' }
             }
         ];
 
