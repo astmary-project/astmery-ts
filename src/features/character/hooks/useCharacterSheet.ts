@@ -126,11 +126,14 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
             timestamp: Date.now(),
         };
 
-        const newLogs = [...logs, newLog];
-        setLogs(newLogs);
-
-        // Auto-save (Optimistic)
-        await save(name, newLogs, characterProfile);
+        setLogs(prevLogs => {
+            const newLogs = [...prevLogs, newLog];
+            // Auto-save (Optimistic)
+            // Note: We call save here to ensure we use the new logs.
+            // Since this is inside the updater, we catch the latest state.
+            save(name, newLogs, characterProfile);
+            return newLogs;
+        });
     };
 
     const save = async (name: string, currentLogs: CharacterLogEntry[], profile: { avatarUrl?: string; bio?: string; specialtyElements?: string[] } | undefined) => {
@@ -140,7 +143,7 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
                 name: name,
                 logs: currentLogs,
                 profile: profile,
-                userId: userId // Pass userId to save (though repository might not need it if it's already in DB, but good for consistency)
+                userId: userId // Pass userId to save
             });
         } catch (e) {
             console.error('Failed to save', e);
@@ -176,9 +179,11 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
     };
 
     const deleteLog = async (logId: string) => {
-        const newLogs = logs.filter(l => l.id !== logId);
-        setLogs(newLogs);
-        await save(name, newLogs, characterProfile);
+        setLogs(prevLogs => {
+            const newLogs = prevLogs.filter(l => l.id !== logId);
+            save(name, newLogs, characterProfile);
+            return newLogs;
+        });
     };
 
     const deleteCharacter = async () => {

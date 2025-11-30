@@ -266,9 +266,30 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                     </div>
                 </div>
 
+                {/* Dynamically render skill sections based on types present */}
+                {(() => {
+                    // Get all unique types and sort them (Standard types first)
+                    const standardTypes = ['Active', 'Passive', 'Spell', 'Other'];
+                    const allTypes = Array.from(new Set(state.skills.map(s => s.type)));
+                    const sortedTypes = allTypes.sort((a, b) => {
+                        const indexA = standardTypes.indexOf(a);
+                        const indexB = standardTypes.indexOf(b);
+                        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                        if (indexA !== -1) return -1;
+                        if (indexB !== -1) return 1;
+                        return a.localeCompare(b);
+                    });
+
+                    return sortedTypes.map(type => (
+                        <div key={type}>
+                            {renderSkillSection(type, state.skills.filter(s => s.type === type))}
+                        </div>
+                    ));
+                })()}
+
                 {/* Wishlist Section */}
                 {state.skillWishlist && state.skillWishlist.length > 0 && (
-                    <div className="mb-8 border-b pb-6">
+                    <div className="mt-8 border-t pt-6">
                         <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 text-primary">
                             ほしいものリスト (Wishlist)
                             <span className="text-xs font-normal text-primary-foreground bg-primary px-2 py-0.5 rounded-full">
@@ -327,27 +348,6 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                         </div>
                     </div>
                 )}
-
-                {/* Dynamically render skill sections based on types present */}
-                {(() => {
-                    // Get all unique types and sort them (Standard types first)
-                    const standardTypes = ['Active', 'Passive', 'Spell', 'Other'];
-                    const allTypes = Array.from(new Set(state.skills.map(s => s.type)));
-                    const sortedTypes = allTypes.sort((a, b) => {
-                        const indexA = standardTypes.indexOf(a);
-                        const indexB = standardTypes.indexOf(b);
-                        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                        if (indexA !== -1) return -1;
-                        if (indexB !== -1) return 1;
-                        return a.localeCompare(b);
-                    });
-
-                    return sortedTypes.map(type => (
-                        <div key={type}>
-                            {renderSkillSection(type, state.skills.filter(s => s.type === type))}
-                        </div>
-                    ));
-                })()}
 
                 {state.skills.length === 0 && <p className="text-muted-foreground text-center py-8">スキルを習得していません。</p>}
 
