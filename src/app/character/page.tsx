@@ -1,5 +1,6 @@
 'use client';
 
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -159,9 +160,10 @@ export default function CharacterListPage() {
                                     <div className="flex justify-between items-start gap-2">
                                         <CardTitle className="flex items-center gap-3 text-lg">
                                             {/* Avatar Placeholder */}
-                                            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-bold shrink-0">
-                                                {char.name.slice(0, 2)}
-                                            </div>
+                                            <Avatar>
+                                                <AvatarImage src={char.profile?.avatarUrl} alt={char.name} />
+                                                <AvatarFallback>{char.name.slice(0, 2)}</AvatarFallback>
+                                            </Avatar>
                                             <span className="truncate">{char.name}</span>
                                         </CardTitle>
                                     </div>
