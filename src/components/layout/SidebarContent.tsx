@@ -50,9 +50,6 @@ export function SidebarContent({ className, user, profileName, onLinkClick }: Si
         <div className={cn("flex flex-col h-full bg-background", className)}>
             <div className="space-y-4 py-4 flex-1">
                 <div className="px-3 py-2">
-                    <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
-                        Astmery
-                    </h2>
                     <div className="space-y-1">
                         {routes.map((route) => (
                             <Button
