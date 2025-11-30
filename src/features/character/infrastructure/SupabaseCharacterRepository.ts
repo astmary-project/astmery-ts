@@ -41,8 +41,8 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
         return {
             id: data.id,
             name: data.name,
-            logs: data.logs as any[], // Type assertion needed for JSONB
-            profile: data.profile as any,
+            logs: data.logs as import('../domain/CharacterLog').CharacterLogEntry[], // Type assertion needed for JSONB
+            profile: data.profile as { avatarUrl?: string; bio?: string; specialtyElements?: string[] },
             userId: data.user_id, // Load userId
         };
     }
@@ -76,8 +76,8 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
         return (characters || []).map(d => ({
             id: d.id,
             name: d.name,
-            logs: d.logs as any[],
-            profile: d.profile as any,
+            logs: d.logs as import('../domain/CharacterLog').CharacterLogEntry[],
+            profile: d.profile as { avatarUrl?: string; bio?: string; specialtyElements?: string[] },
             userId: d.user_id,
             ownerName: profiles[d.user_id] || undefined,
         }));

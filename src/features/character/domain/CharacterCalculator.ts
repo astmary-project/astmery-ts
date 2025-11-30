@@ -469,6 +469,7 @@ export class CharacterCalculator {
     }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace CharacterCalculator {
     export interface SessionContext {
         tempStats?: Record<string, number>;

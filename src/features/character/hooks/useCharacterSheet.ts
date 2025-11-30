@@ -133,7 +133,7 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
         await save(name, newLogs, characterProfile);
     };
 
-    const save = async (name: string, currentLogs: CharacterLogEntry[], profile: any) => {
+    const save = async (name: string, currentLogs: CharacterLogEntry[], profile: { avatarUrl?: string; bio?: string; specialtyElements?: string[] } | undefined) => {
         try {
             await repository.save({
                 id: characterId,

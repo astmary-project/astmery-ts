@@ -12,8 +12,9 @@ interface EquipmentListEditorProps {
 export function EquipmentListEditor({ equipment, onChange }: EquipmentListEditorProps) {
     const handleEquipmentChange = (index: number, field: keyof ItemInput, value: string) => {
         const newItems = [...equipment];
-        // @ts-ignore
-        newItems[index][field] = value;
+        // Note: Using any for assignment because value is always string but field might be constrained to specific string literals (e.g. type).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (newItems[index] as any)[field] = value;
         onChange(newItems);
     };
 
@@ -41,7 +42,7 @@ export function EquipmentListEditor({ equipment, onChange }: EquipmentListEditor
                                 />
                                 <Select
                                     value={item.type}
-                                    onValueChange={v => handleEquipmentChange(index, 'type', v as any)}
+                                    onValueChange={v => handleEquipmentChange(index, 'type', v as "Weapon" | "Armor" | "Accessory" | "Other")}
                                 >
                                     <SelectTrigger className="w-[120px]">
                                         <SelectValue placeholder="種別" />

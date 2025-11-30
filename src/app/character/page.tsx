@@ -1,5 +1,6 @@
 'use client';
 
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +19,7 @@ const repository: ICharacterRepository = new SupabaseCharacterRepository();
 
 export default function CharacterListPage() {
     const router = useRouter();
-    const [characters, setCharacters] = useState<any[]>([]);
+    const [characters, setCharacters] = useState<import('@/features/character/domain/repository/ICharacterRepository').CharacterData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     // Filter States
@@ -67,9 +68,9 @@ export default function CharacterListPage() {
     const allTags = Array.from(new Set(characters.flatMap(c => {
         // Extract tags from logs
         const tags = new Set<string>();
-        c.logs.forEach((log: any) => {
-            if (log.type === 'ADD_TAG') tags.add(log.tagId);
-            if (log.type === 'REMOVE_TAG') tags.delete(log.tagId);
+        c.logs.forEach((log) => {
+            if (log.type === 'ADD_TAG') tags.add(log.tagId!);
+            if (log.type === 'REMOVE_TAG') tags.delete(log.tagId!);
         });
         return Array.from(tags);
     }))).sort();
@@ -81,9 +82,9 @@ export default function CharacterListPage() {
         const matchesSearch = char.name.toLowerCase().includes(searchTerm.toLowerCase());
 
         const charTags = new Set<string>();
-        char.logs.forEach((log: any) => {
-            if (log.type === 'ADD_TAG') charTags.add(log.tagId);
-            if (log.type === 'REMOVE_TAG') charTags.delete(log.tagId);
+        char.logs.forEach((log) => {
+            if (log.type === 'ADD_TAG') charTags.add(log.tagId!);
+            if (log.type === 'REMOVE_TAG') charTags.delete(log.tagId!);
         });
         const matchesTag = selectedTag === 'all' || charTags.has(selectedTag);
 
@@ -146,9 +147,9 @@ export default function CharacterListPage() {
                 {filteredCharacters.map((char) => {
                     // Calculate tags for display
                     const tags = new Set<string>();
-                    char.logs.forEach((log: any) => {
-                        if (log.type === 'ADD_TAG') tags.add(log.tagId);
-                        if (log.type === 'REMOVE_TAG') tags.delete(log.tagId);
+                    char.logs.forEach((log) => {
+                        if (log.type === 'ADD_TAG') tags.add(log.tagId!);
+                        if (log.type === 'REMOVE_TAG') tags.delete(log.tagId!);
                     });
                     const displayTags = Array.from(tags);
 
@@ -159,9 +160,10 @@ export default function CharacterListPage() {
                                     <div className="flex justify-between items-start gap-2">
                                         <CardTitle className="flex items-center gap-3 text-lg">
                                             {/* Avatar Placeholder */}
-                                            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-bold shrink-0">
-                                                {char.name.slice(0, 2)}
-                                            </div>
+                                            <Avatar>
+                                                <AvatarImage src={char.profile?.avatarUrl} alt={char.name} />
+                                                <AvatarFallback>{char.name.slice(0, 2)}</AvatarFallback>
+                                            </Avatar>
                                             <span className="truncate">{char.name}</span>
                                         </CardTitle>
                                     </div>

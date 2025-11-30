@@ -1,3 +1,4 @@
+import { AppHeader } from "@/components/layout/AppHeader";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -30,18 +31,27 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  let user = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch (error) {
+    console.error("Failed to get user", error);
+  }
 
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <div className="flex min-h-screen">
-          <AppSidebar user={user} />
-          <main className="flex-1">
-            {children}
-          </main>
+        <div className="flex min-h-screen flex-col">
+          <AppHeader user={user} />
+          <div className="flex flex-1">
+            <AppSidebar user={user} />
+            <main className="flex-1">
+              {children}
+            </main>
+          </div>
         </div>
       </body>
     </html>

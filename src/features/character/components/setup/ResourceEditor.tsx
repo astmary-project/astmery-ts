@@ -11,8 +11,7 @@ interface ResourceEditorProps {
 export function ResourceEditor({ resources, onChange }: ResourceEditorProps) {
     const handleResourceChange = (index: number, field: keyof ResourceInput, value: string) => {
         const newResources = [...resources];
-        // @ts-ignore
-        newResources[index][field] = value;
+        newResources[index] = { ...newResources[index], [field]: value };
         onChange(newResources);
     };
 

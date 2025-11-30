@@ -37,15 +37,19 @@ export const SkillEditorDialog: React.FC<SkillEditorDialogProps> = ({
 
     useEffect(() => {
         if (isOpen) {
-            setSkill({
-                name: '',
-                type: 'Passive',
-                acquisitionType: 'Standard',
-                description: '',
-                ...initialSkill
-            });
+            // Defer update to avoid set-state-in-effect
+            const timer = setTimeout(() => {
+                setSkill({
+                    name: '',
+                    type: 'Passive',
+                    acquisitionType: 'Standard',
+                    description: '',
+                    ...initialSkill
+                });
+            }, 0);
+            return () => clearTimeout(timer);
         }
-    }, [isOpen, initialSkill]);
+    }, [isOpen]); // initialSkill intentionally omitted to avoid reset on edit
 
     const handleChange = (field: keyof Skill, value: string) => {
         setSkill(prev => ({ ...prev, [field]: value }));

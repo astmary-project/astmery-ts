@@ -5,7 +5,7 @@ export class CharacterLogFactory {
     /**
      * Normalizes keys in a JSON object (e.g. "筋力" -> "Body")
      */
-    private static normalizeModifiers<T>(json: string | undefined, valueParser: (v: any) => T): Record<string, T> | undefined {
+    private static normalizeModifiers<T>(json: string | undefined, valueParser: (v: unknown) => T): Record<string, T> | undefined {
         if (!json) return undefined;
         try {
             const parsed = JSON.parse(json);
@@ -66,7 +66,7 @@ export class CharacterLogFactory {
         const item: Item = {
             id: crypto.randomUUID(),
             name: params.name,
-            type: params.subtype as any,
+            type: params.subtype as Item['type'],
             description: params.description,
             // Reuse timing/range fields for roll/effect to save state variables in UI
             roll: (params.subtype === 'Weapon' || params.subtype === 'Focus') ? params.timing : undefined,
@@ -144,7 +144,7 @@ export class CharacterLogFactory {
     }
 
     // Generic fallback for simple logs if needed, or specific ones for others
-    static createSimpleLog(type: any, description: string): CharacterLogEntry {
+    static createSimpleLog(type: CharacterLogEntry['type'], description: string): CharacterLogEntry {
         return {
             id: crypto.randomUUID(),
             type,
