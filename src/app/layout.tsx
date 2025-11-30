@@ -1,3 +1,4 @@
+import { AppHeader } from "@/components/layout/AppHeader";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -43,11 +44,14 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <div className="flex min-h-screen">
-          <AppSidebar user={user} />
-          <main className="flex-1">
-            {children}
-          </main>
+        <div className="flex min-h-screen flex-col">
+          <AppHeader user={user} />
+          <div className="flex flex-1">
+            <AppSidebar user={user} />
+            <main className="flex-1">
+              {children}
+            </main>
+          </div>
         </div>
       </body>
     </html>
