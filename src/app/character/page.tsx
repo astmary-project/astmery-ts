@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ICharacterRepository } from '@/features/character/domain/repository/ICharacterRepository';
+import { useCharacterFilter } from '@/features/character/hooks/useCharacterFilter';
 import { SupabaseCharacterRepository } from '@/features/character/infrastructure/SupabaseCharacterRepository';
 import { supabase } from '@/lib/supabase';
 import { Plus, Search, User } from 'lucide-react';
@@ -21,11 +22,6 @@ export default function CharacterListPage() {
     const router = useRouter();
     const [characters, setCharacters] = useState<import('@/features/character/domain/repository/ICharacterRepository').CharacterData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-
-    // Filter States
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedTag, setSelectedTag] = useState<string>('all');
-    const [selectedOwner, setSelectedOwner] = useState<string>('all');
 
     useEffect(() => {
         const fetchCharacters = async () => {
@@ -64,34 +60,18 @@ export default function CharacterListPage() {
         }
     };
 
-    // Extract unique tags and owners
-    const allTags = Array.from(new Set(characters.flatMap(c => {
-        // Extract tags from logs
-        const tags = new Set<string>();
-        c.logs.forEach((log) => {
-            if (log.type === 'ADD_TAG') tags.add(log.tagId!);
-            if (log.type === 'REMOVE_TAG') tags.delete(log.tagId!);
-        });
-        return Array.from(tags);
-    }))).sort();
-
-    const allOwners = Array.from(new Set(characters.map(c => c.ownerName).filter(Boolean))).sort();
-
-    // Filter logic
-    const filteredCharacters = characters.filter(char => {
-        const matchesSearch = char.name.toLowerCase().includes(searchTerm.toLowerCase());
-
-        const charTags = new Set<string>();
-        char.logs.forEach((log) => {
-            if (log.type === 'ADD_TAG') charTags.add(log.tagId!);
-            if (log.type === 'REMOVE_TAG') charTags.delete(log.tagId!);
-        });
-        const matchesTag = selectedTag === 'all' || charTags.has(selectedTag);
-
-        const matchesOwner = selectedOwner === 'all' || char.ownerName === selectedOwner;
-
-        return matchesSearch && matchesTag && matchesOwner;
-    });
+    // Filter Logic (Hook)
+    const {
+        searchTerm,
+        setSearchTerm,
+        selectedTag,
+        setSelectedTag,
+        selectedOwner,
+        setSelectedOwner,
+        allTags,
+        allOwners,
+        filteredCharacters
+    } = useCharacterFilter(characters);
 
     if (isLoading) {
         return <div className="p-8 text-center">読み込み中...</div>;

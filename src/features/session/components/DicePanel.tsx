@@ -1,10 +1,10 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { DiceRoller, RollResult } from '@/domain/dice/DiceRoller';
 import React, { useState } from 'react';
 import { CharacterState, JAPANESE_TO_ENGLISH_STATS } from '../../character';
 import { CommandParser } from '../domain/CommandParser';
-import { DiceRoller, RollResult } from '../domain/DiceRoller';
 import { SessionLogEntry } from '../domain/SessionLog';
 
 interface DicePanelProps {
@@ -39,7 +39,11 @@ export function DicePanel({ state, resourceValues, rollHistory, onRoll, onLogCom
 
         try {
             const result = DiceRoller.roll(formula, tempState, JAPANESE_TO_ENGLISH_STATS);
-            onRoll(result);
+            if (result.isFailure) {
+                console.error(result.error);
+                return;
+            }
+            onRoll(result.value);
         } catch (e) {
             console.error('DicePanel: Roll failed', e);
         }

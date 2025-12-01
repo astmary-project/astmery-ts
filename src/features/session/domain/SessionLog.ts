@@ -1,4 +1,4 @@
-import { RollResult } from './DiceRoller';
+import { RollResult } from '@/domain/dice/DiceRoller';
 
 export type SessionLogType =
     | 'UPDATE_RESOURCE' // Resource update (HP/MP etc)
