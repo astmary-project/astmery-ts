@@ -52,8 +52,9 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
                     }
                 }
 
-                const data = await repository.load(characterId);
-                if (data) {
+                const result = await repository.load(characterId);
+                if (result.isSuccess) {
+                    const data = result.value;
                     let currentLogs = data.logs;
                     let needsMigration = false;
 
@@ -108,6 +109,10 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
                 } else {
                     // Initialize with empty or default if not found (for demo)
                     console.log('Character not found, starting fresh');
+                    if (result.error.code !== 'RESOURCE_NOT_FOUND') {
+                        console.error(result.error);
+                        setError('Failed to load character');
+                    }
                 }
             } catch (e) {
                 console.error(e);
@@ -138,15 +143,18 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
 
     const save = async (name: string, currentLogs: CharacterLogEntry[], profile: { avatarUrl?: string; bio?: string; specialtyElements?: string[] } | undefined) => {
         try {
-            await repository.save({
+            const result = await repository.save({
                 id: characterId,
                 name: name,
                 logs: currentLogs,
                 profile: profile,
                 userId: userId // Pass userId to save
             });
+            if (result.isFailure) {
+                console.error('Failed to save', result.error);
+            }
         } catch (e) {
-            console.error('Failed to save', e);
+            console.error('Unexpected error saving', e);
             // Handle error (toast etc)
         }
     };
@@ -188,11 +196,16 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
 
     const deleteCharacter = async () => {
         try {
-            await repository.delete(characterId);
-            // Redirect will be handled by the component or router
-            return true;
+            const result = await repository.delete(characterId);
+            if (result.isSuccess) {
+                return true;
+            } else {
+                console.error('Failed to delete character', result.error);
+                setError('Failed to delete character');
+                return false;
+            }
         } catch (e) {
-            console.error('Failed to delete character', e);
+            console.error('Unexpected error deleting character', e);
             setError('Failed to delete character');
             return false;
         }

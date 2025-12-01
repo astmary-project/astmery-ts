@@ -1,3 +1,5 @@
+import { AppError } from '@/domain/shared/AppError';
+import { err, ok, Result } from '@/domain/shared/Result';
 import { CharacterData, ICharacterRepository } from '../domain/repository/ICharacterRepository';
 
 export class InMemoryCharacterRepository implements ICharacterRepository {
@@ -155,31 +157,33 @@ export class InMemoryCharacterRepository implements ICharacterRepository {
         });
     }
 
-    async save(character: CharacterData): Promise<void> {
+    async save(character: CharacterData): Promise<Result<void, AppError>> {
         // Simulate async network delay
         await new Promise(resolve => setTimeout(resolve, 100));
         this.storage.set(character.id, character);
         console.log(`[InMemoryRepo] Saved character ${character.id}`, character);
+        return ok(undefined);
     }
 
-    async load(id: string): Promise<CharacterData | null> {
+    async load(id: string): Promise<Result<CharacterData, AppError>> {
         await new Promise(resolve => setTimeout(resolve, 100));
         const data = this.storage.get(id);
         if (!data) {
             console.warn(`[InMemoryRepo] Character ${id} not found`);
-            return data || null;
+            return err(AppError.notFound(`Character not found: ${id}`));
         }
-        return JSON.parse(JSON.stringify(data)); // Return copy
+        return ok(JSON.parse(JSON.stringify(data))); // Return copy
     }
 
-    async listAll(): Promise<CharacterData[]> {
+    async listAll(): Promise<Result<CharacterData[], AppError>> {
         await new Promise(resolve => setTimeout(resolve, 100));
-        return Array.from(this.storage.values());
+        return ok(Array.from(this.storage.values()));
     }
 
-    async delete(id: string): Promise<void> {
+    async delete(id: string): Promise<Result<void, AppError>> {
         await new Promise(resolve => setTimeout(resolve, 100));
         this.storage.delete(id);
         console.log(`[InMemoryRepo] Deleted character ${id}`);
+        return ok(undefined);
     }
 }

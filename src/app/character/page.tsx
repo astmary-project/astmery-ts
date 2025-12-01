@@ -26,10 +26,14 @@ export default function CharacterListPage() {
     useEffect(() => {
         const fetchCharacters = async () => {
             try {
-                const data = await repository.listAll();
-                setCharacters(data);
+                const result = await repository.listAll();
+                if (result.isSuccess) {
+                    setCharacters(result.value);
+                } else {
+                    console.error('Failed to fetch characters', result.error);
+                }
             } catch (error) {
-                console.error('Failed to fetch characters', error);
+                console.error('Unexpected error fetching characters', error);
             } finally {
                 setIsLoading(false);
             }
@@ -52,11 +56,16 @@ export default function CharacterListPage() {
         };
 
         try {
-            await repository.save(newCharacter);
-            router.push(`/character/${newId}/setup`);
+            const result = await repository.save(newCharacter);
+            if (result.isSuccess) {
+                router.push(`/character/${newId}/setup`);
+            } else {
+                console.error('Failed to create character', result.error);
+                alert('キャラクターの作成に失敗しました。');
+            }
         } catch (error) {
-            console.error('Failed to create character', error);
-            alert('キャラクターの作成に失敗しました。');
+            console.error('Unexpected error creating character', error);
+            alert('キャラクターの作成中に予期せぬエラーが発生しました。');
         }
     };
 
