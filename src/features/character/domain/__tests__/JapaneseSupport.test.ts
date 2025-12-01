@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DiceRoller } from '../../../session/domain/DiceRoller';
+import { DiceRoller } from '../../../../domain/dice/DiceRoller';
 import { CharacterCalculator } from '../CharacterCalculator';
 import { CharacterState } from '../CharacterLog';
 import { JAPANESE_TO_ENGLISH_STATS } from '../constants';
@@ -79,7 +79,10 @@ describe('Japanese Support', () => {
     describe('DiceRoller', () => {
         it('should roll with Japanese stat names', () => {
             const result = DiceRoller.roll('1d1 + {肉体}', mockState, JAPANESE_TO_ENGLISH_STATS);
-            expect(result.total).toBe(6); // 1 + 5
+            expect(result.isSuccess).toBe(true);
+            if (result.isSuccess) {
+                expect(result.value.total).toBe(6); // 1 (roll) + 5 (Body)
+            };
         });
 
         it('should roll with custom Japanese variables', () => {
@@ -88,7 +91,10 @@ describe('Japanese Support', () => {
                 stats: { ...mockState.stats, 'カルマ': 20 }
             };
             const result = DiceRoller.roll('1d1 + {カルマ}', stateWithCustom, JAPANESE_TO_ENGLISH_STATS);
-            expect(result.total).toBe(21); // 1 + 20
+            expect(result.isSuccess).toBe(true);
+            if (result.isSuccess) {
+                expect(result.value.total).toBe(21); // 1 (roll) + 20 (Karma)
+            };
         });
     });
 });
