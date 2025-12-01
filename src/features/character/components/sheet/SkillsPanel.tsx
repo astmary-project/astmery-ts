@@ -12,7 +12,7 @@ interface SkillsPanelProps {
     state: CharacterState;
     onRoll: (formula: string, description?: string) => void;
     isEditMode?: boolean;
-    onAddSkill?: (skill: Skill) => void;
+    onAddSkill?: (skill: Skill, cost?: number) => void;
     onUpdateSkill?: (skill: Skill) => void;
     onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
 }
@@ -53,26 +53,25 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
     const handleConfirmAcquisition = (cost: number, isSuccess: boolean, type: 'Free' | 'Standard' | 'Grade') => {
         if (!acquiringSkill) return;
 
-        // 1. Deduct EXP (if cost > 0)
-        if (cost > 0) {
-            onAddLog({
-                type: 'SPEND_EXP',
-                value: cost,
-                description: isSuccess
-                    ? `Spent ${cost} EXP to acquire skill from wishlist: ${acquiringSkill.name}`
-                    : `Spent ${cost} EXP on failed attempt for: ${acquiringSkill.name}`
-            });
-        }
-
-        // 2. Add Skill (if success)
+        // 1. Add Skill (if success)
         if (isSuccess && onAddSkill) {
-            onAddSkill({ ...acquiringSkill, acquisitionType: type });
+            // Pass cost to onAddSkill so it's included in the LEARN_SKILL log
+            onAddSkill({ ...acquiringSkill, acquisitionType: type }, cost);
 
-            // 3. Remove from Wishlist
+            // 2. Remove from Wishlist
             onAddLog({
                 type: 'REMOVE_WISHLIST_SKILL',
                 skill: acquiringSkill,
                 description: `Acquired from wishlist: ${acquiringSkill.name}`
+            });
+        } else if (!isSuccess && cost > 0) {
+            // If failed but cost exists (Grade retry failure), we still need to spend EXP.
+            // Since we don't add the skill, we can't use LEARN_SKILL log.
+            // So we MUST use SPEND_EXP for failure case.
+            onAddLog({
+                type: 'SPEND_EXP',
+                value: cost,
+                description: `Spent ${cost} EXP on failed attempt for: ${acquiringSkill.name}`
             });
         }
 
@@ -80,20 +79,16 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
     };
 
     const handleAcquireSkill = (skill: Partial<Skill>, cost: number, isSuccess: boolean) => {
-        // 1. Deduct EXP (if cost > 0)
-        if (cost > 0) {
+        // 1. Add Skill (if success)
+        if (isSuccess && onAddSkill) {
+            onAddSkill({ ...skill, id: crypto.randomUUID() } as Skill, cost);
+        } else if (!isSuccess && cost > 0) {
+            // Failure case: Spend EXP manually
             onAddLog({
                 type: 'SPEND_EXP',
                 value: cost,
-                description: isSuccess
-                    ? `Spent ${cost} EXP to acquire skill: ${skill.name}`
-                    : `Spent ${cost} EXP on failed attempt for: ${skill.name}`
+                description: `Spent ${cost} EXP on failed attempt for: ${skill.name}`
             });
-        }
-
-        // 2. Add Skill (if success)
-        if (isSuccess && onAddSkill) {
-            onAddSkill({ ...skill, id: crypto.randomUUID() } as Skill);
         }
 
         setEditingSkill(null);
@@ -266,9 +261,30 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                     </div>
                 </div>
 
+                {/* Dynamically render skill sections based on types present */}
+                {(() => {
+                    // Get all unique types and sort them (Standard types first)
+                    const standardTypes = ['Active', 'Passive', 'Spell', 'Other'];
+                    const allTypes = Array.from(new Set(state.skills.map(s => s.type)));
+                    const sortedTypes = allTypes.sort((a, b) => {
+                        const indexA = standardTypes.indexOf(a);
+                        const indexB = standardTypes.indexOf(b);
+                        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                        if (indexA !== -1) return -1;
+                        if (indexB !== -1) return 1;
+                        return a.localeCompare(b);
+                    });
+
+                    return sortedTypes.map(type => (
+                        <div key={type}>
+                            {renderSkillSection(type, state.skills.filter(s => s.type === type))}
+                        </div>
+                    ));
+                })()}
+
                 {/* Wishlist Section */}
                 {state.skillWishlist && state.skillWishlist.length > 0 && (
-                    <div className="mb-8 border-b pb-6">
+                    <div className="mt-8 border-t pt-6">
                         <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 text-primary">
                             ほしいものリスト (Wishlist)
                             <span className="text-xs font-normal text-primary-foreground bg-primary px-2 py-0.5 rounded-full">
@@ -328,27 +344,6 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                     </div>
                 )}
 
-                {/* Dynamically render skill sections based on types present */}
-                {(() => {
-                    // Get all unique types and sort them (Standard types first)
-                    const standardTypes = ['Active', 'Passive', 'Spell', 'Other'];
-                    const allTypes = Array.from(new Set(state.skills.map(s => s.type)));
-                    const sortedTypes = allTypes.sort((a, b) => {
-                        const indexA = standardTypes.indexOf(a);
-                        const indexB = standardTypes.indexOf(b);
-                        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                        if (indexA !== -1) return -1;
-                        if (indexB !== -1) return 1;
-                        return a.localeCompare(b);
-                    });
-
-                    return sortedTypes.map(type => (
-                        <div key={type}>
-                            {renderSkillSection(type, state.skills.filter(s => s.type === type))}
-                        </div>
-                    ));
-                })()}
-
                 {state.skills.length === 0 && <p className="text-muted-foreground text-center py-8">スキルを習得していません。</p>}
 
                 {isEditMode && (
@@ -373,7 +368,6 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                         currentStandardSkills={state.skills.filter(s => s.acquisitionType === 'Standard' || !s.acquisitionType).length}
                     />
                 )}
-
                 {acquiringSkill && (
                     <SkillAcquisitionDialog
                         isOpen={!!acquiringSkill}
@@ -381,6 +375,7 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                         skill={acquiringSkill}
                         onConfirm={handleConfirmAcquisition}
                         currentStandardSkills={state.skills.filter(s => s.acquisitionType === 'Standard' || !s.acquisitionType).length}
+                        currentExp={state.exp.free}
                     />
                 )}
             </CardContent>

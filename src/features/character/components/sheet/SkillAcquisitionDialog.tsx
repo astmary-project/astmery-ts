@@ -12,6 +12,7 @@ interface SkillAcquisitionDialogProps {
     skill: Skill;
     onConfirm: (cost: number, isSuccess: boolean, type: 'Free' | 'Standard' | 'Grade') => void;
     currentStandardSkills: number;
+    currentExp: number;
 }
 
 export const SkillAcquisitionDialog: React.FC<SkillAcquisitionDialogProps> = ({
@@ -19,7 +20,8 @@ export const SkillAcquisitionDialog: React.FC<SkillAcquisitionDialogProps> = ({
     onClose,
     skill,
     onConfirm,
-    currentStandardSkills
+    currentStandardSkills,
+    currentExp
 }) => {
     const [type, setType] = useState<'Free' | 'Standard' | 'Grade'>((skill.acquisitionType as 'Free' | 'Standard' | 'Grade') || 'Standard');
     const [isRetry, setIsRetry] = useState(false);
@@ -78,11 +80,19 @@ export const SkillAcquisitionDialog: React.FC<SkillAcquisitionDialogProps> = ({
                     <div className="bg-muted p-3 rounded-md text-sm">
                         <div className="flex justify-between mb-1">
                             <span>成功時コスト:</span>
-                            <span className="font-bold">{costs.success} EXP</span>
+                            <span className={currentExp < costs.success ? "font-bold text-destructive" : "font-bold"}>
+                                {costs.success} EXP
+                            </span>
                         </div>
                         <div className="flex justify-between">
                             <span>失敗時コスト:</span>
-                            <span className="font-bold">{costs.failure} EXP</span>
+                            <span className={currentExp < costs.failure ? "font-bold text-destructive" : "font-bold"}>
+                                {costs.failure} EXP
+                            </span>
+                        </div>
+                        <div className="flex justify-between mt-2 pt-2 border-t">
+                            <span>所持経験点:</span>
+                            <span className="font-mono">{currentExp} EXP</span>
                         </div>
                     </div>
                 </div>
@@ -92,11 +102,13 @@ export const SkillAcquisitionDialog: React.FC<SkillAcquisitionDialogProps> = ({
                     <Button
                         variant="destructive"
                         onClick={() => handleConfirm(false)}
+                        disabled={currentExp < costs.failure}
                     >
                         失敗 (コスト: {costs.failure})
                     </Button>
                     <Button
                         onClick={() => handleConfirm(true)}
+                        disabled={currentExp < costs.success}
                     >
                         習得 (コスト: {costs.success})
                     </Button>

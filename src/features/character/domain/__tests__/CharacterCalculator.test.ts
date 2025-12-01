@@ -378,3 +378,125 @@ describe('CharacterCalculator Cost Logic', () => {
         expect(state3.skillWishlist).toHaveLength(0);
     });
 });
+
+describe('CharacterCalculator XP Calculation Refactor', () => {
+    it('should calculate used exp from legacy SPEND_EXP logs', () => {
+        const logs: CharacterLogEntry[] = [
+            {
+                id: '1',
+                type: 'SPEND_EXP',
+                timestamp: 100,
+                value: 10,
+                description: 'Legacy spend'
+            }
+        ];
+
+        const state = CharacterCalculator.calculateState(logs);
+        expect(state.exp.used).toBe(10);
+    });
+
+    it('should calculate used exp from new GROW_STAT logs with cost', () => {
+        const logs: CharacterLogEntry[] = [
+            {
+                id: '1',
+                type: 'GROW_STAT',
+                timestamp: 100,
+                statGrowth: {
+                    key: 'Body',
+                    value: 1,
+                    cost: 10
+                },
+                cost: 10, // Root cost
+                description: 'Grow Body'
+            }
+        ];
+
+        const state = CharacterCalculator.calculateState(logs);
+        expect(state.exp.used).toBe(10);
+        expect(state.stats['Body']).toBe(1);
+    });
+
+    it('should calculate used exp from new LEARN_SKILL logs with cost', () => {
+        const logs: CharacterLogEntry[] = [
+            {
+                id: '1',
+                type: 'LEARN_SKILL',
+                timestamp: 100,
+                skill: {
+                    id: 's1',
+                    name: 'Test Skill',
+                    type: 'Active',
+                    description: 'Test'
+                },
+                cost: 15,
+                description: 'Learn Skill'
+            }
+        ];
+
+        const state = CharacterCalculator.calculateState(logs);
+        expect(state.exp.used).toBe(15);
+        expect(state.skills.length).toBe(1);
+    });
+
+    it('should calculate used exp from mixed logs', () => {
+        const logs: CharacterLogEntry[] = [
+            {
+                id: '1',
+                type: 'SPEND_EXP',
+                timestamp: 100,
+                value: 5,
+                description: 'Manual spend'
+            },
+            {
+                id: '2',
+                type: 'GROW_STAT',
+                timestamp: 200,
+                statGrowth: {
+                    key: 'Body',
+                    value: 1,
+                    cost: 10
+                },
+                cost: 10,
+                description: 'Grow Body'
+            },
+            {
+                id: '3',
+                type: 'LEARN_SKILL',
+                timestamp: 300,
+                skill: {
+                    id: 's1',
+                    name: 'Test Skill',
+                    type: 'Active',
+                    description: 'Test'
+                },
+                cost: 15,
+                description: 'Learn Skill'
+            }
+        ];
+
+        const state = CharacterCalculator.calculateState(logs);
+        expect(state.exp.used).toBe(5 + 10 + 15); // 30
+    });
+
+    it('should handle legacy GROW_STAT without root cost (migrated format)', () => {
+        // This simulates a log that was migrated or created before root cost was added, 
+        // but has cost in statGrowth (which was already there).
+        const logs: CharacterLogEntry[] = [
+            {
+                id: '1',
+                type: 'GROW_STAT',
+                timestamp: 100,
+                statGrowth: {
+                    key: 'Body',
+                    value: 1,
+                    cost: 10
+                },
+                // No root cost
+                description: 'Grow Body'
+            }
+        ];
+
+        const state = CharacterCalculator.calculateState(logs);
+        expect(state.exp.used).toBe(10);
+    });
+});
