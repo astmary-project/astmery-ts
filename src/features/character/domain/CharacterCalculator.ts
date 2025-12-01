@@ -197,11 +197,15 @@ export class CharacterCalculator {
                     const trimmedKey = key.trim();
                     const normalizedKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
                     state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + value;
+                    // Add cost if present (new format) or from statGrowth (migrated/intermediate)
+                    if (log.cost) state.exp.used += log.cost;
+                    else if (log.statGrowth.cost) state.exp.used += log.statGrowth.cost;
                 } else if (log.statKey && log.value !== undefined) {
                     // Fallback for legacy format if any
                     const trimmedKey = log.statKey.trim();
                     const normalizedKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
                     state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + log.value;
+                    // Legacy logs might not have cost here, relied on SPEND_EXP
                 }
                 break;
             case 'GROWTH': // Legacy support
@@ -244,11 +248,15 @@ export class CharacterCalculator {
             case 'LEARN_SKILL':
                 if (log.skill) {
                     state.skills.push(log.skill);
+                    if (log.cost) state.exp.used += log.cost;
                 }
                 break;
             case 'FORGET_SKILL':
                 if (log.skill?.id) {
                     state.skills = state.skills.filter(s => s.id !== log.skill!.id);
+                    // Note: We don't refund cost automatically here unless we track it specifically.
+                    // If we wanted to refund, we'd need to know the original cost.
+                    // For now, manual SPEND_EXP (negative) or specific REFUND log would be needed if refund is desired.
                 }
                 break;
             case 'UPDATE_SKILL':

@@ -38,6 +38,7 @@ export interface CharacterLogEntry {
     };
     // Metadata
     description?: string;
+    cost?: number; // New: XP Cost associated with this action
 }
 
 

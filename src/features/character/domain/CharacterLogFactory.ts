@@ -31,6 +31,7 @@ export class CharacterLogFactory {
         cost?: string;
         modifiersJson?: string;
         dynamicModifiersJson?: string;
+        xpCost?: number; // New: XP Cost (renamed from cost to avoid conflict with skill activation cost)
     }): CharacterLogEntry {
         const skill: Skill = {
             id: crypto.randomUUID(),
@@ -51,6 +52,7 @@ export class CharacterLogFactory {
             timestamp: Date.now(),
             skill,
             description: `Learned skill: ${params.name}`,
+            cost: params.xpCost, // Include cost in log
         };
     }
 
@@ -84,14 +86,18 @@ export class CharacterLogFactory {
         };
     }
 
-    static createGrowthLog(statKey: string, value: number, comment?: string): CharacterLogEntry {
+    static createGrowthLog(statKey: string, value: number, comment?: string, cost?: number): CharacterLogEntry {
         return {
             id: crypto.randomUUID(),
-            type: 'GROWTH',
+            type: 'GROW_STAT', // Use new type directly
             timestamp: Date.now(),
-            statKey,
-            value,
+            statGrowth: {
+                key: statKey,
+                value,
+                cost: cost || 0,
+            },
             description: comment || `Growth: ${statKey} +${value}`,
+            cost: cost, // Include root cost as well for consistency
         };
     }
 

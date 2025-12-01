@@ -255,16 +255,18 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
                 value: 1, // Always +1 for now
                 cost
             },
-            description: `Increased ${key} by 1 (Cost: ${cost} EXP)`
+            description: `Increased ${key} by 1 (Cost: ${cost} EXP)`,
+            cost: cost // Include root cost
         });
     };
 
     // Handle Skill Actions
-    const handleAddSkill = (skill: Skill) => {
+    const handleAddSkill = (skill: Skill, cost?: number) => {
         onAddLog({
             type: 'LEARN_SKILL',
             skill,
-            description: `Learned skill: ${skill.name}`
+            description: `Learned skill: ${skill.name}`,
+            cost: cost
         });
     };
 
