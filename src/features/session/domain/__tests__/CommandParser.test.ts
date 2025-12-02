@@ -7,7 +7,7 @@ describe('CommandParser', () => {
         expect(log).not.toBeNull();
         expect(log?.type).toBe('UPDATE_RESOURCE');
         expect(log?.resourceUpdate).toEqual({
-            resourceId: 'HP',
+            resourceId: 'hp',
             type: 'set',
             value: 10
         });
@@ -18,7 +18,7 @@ describe('CommandParser', () => {
         expect(log).not.toBeNull();
         expect(log?.type).toBe('UPDATE_RESOURCE');
         expect(log?.resourceUpdate).toEqual({
-            resourceId: 'HP',
+            resourceId: 'hp',
             type: 'reset',
             resetTarget: 'initial'
         });
@@ -29,7 +29,7 @@ describe('CommandParser', () => {
         expect(log).not.toBeNull();
         expect(log?.type).toBe('UPDATE_RESOURCE');
         expect(log?.resourceUpdate).toEqual({
-            resourceId: 'MP',
+            resourceId: 'mp',
             type: 'reset',
             resetTarget: 'initial'
         });
