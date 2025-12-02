@@ -22,14 +22,9 @@ type UserMeta = {
     };
 };
 
-type RoomEvent = {
-    // type: "NOTIFICATION",
-    // ...
-};
+type RoomEvent = Record<string, never>;
 
-type ThreadMetadata = {
-    // ...
-};
+type ThreadMetadata = Record<string, never>;
 
 export const {
     RoomProvider,

@@ -118,6 +118,7 @@ export function MapPanel({ backgroundImageUrl, tokens, onLog }: MapPanelProps) {
             onLog({
                 id: crypto.randomUUID(),
                 type: 'MOVE_TOKEN',
+                // eslint-disable-next-line react-hooks/purity
                 timestamp: Date.now(),
                 token: {
                     id: selectedTokenId,
@@ -138,6 +139,7 @@ export function MapPanel({ backgroundImageUrl, tokens, onLog }: MapPanelProps) {
         onLog({
             id: crypto.randomUUID(),
             type: 'UPDATE_MAP_BACKGROUND',
+            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
             mapBackground: { url: newBgUrl },
             description: 'Updated map background'
@@ -161,6 +163,7 @@ export function MapPanel({ backgroundImageUrl, tokens, onLog }: MapPanelProps) {
             roomId: 'demo', // TODO: Pass real room ID
             type: 'ADD_TOKEN',
             token: newToken,
+            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
         });
     };

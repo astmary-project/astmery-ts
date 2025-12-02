@@ -51,7 +51,7 @@ export class SupabaseRoomRepository implements IRoomRepository {
     async update(id: string, data: Partial<Room>): Promise<Result<void, AppError>> {
         try {
             const supabase = await createClient();
-            const updateData: any = {};
+            const updateData: Record<string, unknown> = {};
             if (data.name) updateData.name = data.name;
             if (data.status) updateData.status = data.status;
             updateData.updated_at = new Date().toISOString();
@@ -95,7 +95,7 @@ export class SupabaseRoomRepository implements IRoomRepository {
         }
     }
 
-    private mapToDomain(data: any): Room {
+    private mapToDomain(data: RoomRow): Room {
         return {
             id: data.id,
             name: data.name,
@@ -105,4 +105,13 @@ export class SupabaseRoomRepository implements IRoomRepository {
             updatedAt: data.updated_at,
         };
     }
+}
+
+interface RoomRow {
+    id: string;
+    name: string;
+    status: 'active' | 'waiting' | 'closed';
+    created_by: string;
+    created_at: string;
+    updated_at: string;
 }

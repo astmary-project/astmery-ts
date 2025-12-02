@@ -69,6 +69,7 @@ export function DicePanel({ state, resourceValues, logs, onLog, tabs = [], token
             onLog({
                 id: crypto.randomUUID(),
                 type: 'ROLL',
+                // eslint-disable-next-line react-hooks/purity
                 timestamp: Date.now(),
                 diceRoll: rollResult.value,
                 channel: 'main',
@@ -82,6 +83,7 @@ export function DicePanel({ state, resourceValues, logs, onLog, tabs = [], token
         onLog({
             id: crypto.randomUUID(),
             type: 'CHAT',
+            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
             channel: activeTab === 'system' ? 'main' : activeTab, // System tab shouldn't be chat target
             chatMessage: {
@@ -107,6 +109,7 @@ export function DicePanel({ state, resourceValues, logs, onLog, tabs = [], token
         onLog({
             id: crypto.randomUUID(),
             type: 'ADD_TAB',
+            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
             tabId: id,
             tabName: newTabName,

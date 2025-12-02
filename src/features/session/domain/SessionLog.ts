@@ -61,5 +61,6 @@ export interface SessionLogEntry {
     } | null;
 
     // Index signature for JSON compatibility
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
 }

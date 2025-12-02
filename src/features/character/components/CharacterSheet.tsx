@@ -38,7 +38,7 @@ interface CharacterSheetProps {
     isAdmin?: boolean;
     onDeleteCharacter?: () => void;
 }
-export const CharacterSheet: React.FC<CharacterSheetProps> = ({
+export function CharacterSheet({
     name,
     character,
     state,
@@ -48,8 +48,7 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
     onNameChange,
     onAvatarChange,
     onUpdateProfile,
-    initialLogs,
-    onSave,
+
     currentUserId,
     ownerId,
     ownerName,
@@ -58,11 +57,11 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
     onDeleteCharacter,
     isEditMode: propIsEditMode,
     onToggleEditMode,
-}) => {
+}: CharacterSheetProps) {
     // State
     // const [logs, setLogs] = useState<SessionLogEntry[]>(initialLogs); // Removed to avoid shadowing and use prop
     const [localIsEditMode, setLocalIsEditMode] = useState(false);
-    const [activeTab, setActiveTab] = useState("status");
+    // const [activeTab, setActiveTab] = useState("status");
 
     const isEditMode = propIsEditMode !== undefined ? propIsEditMode : localIsEditMode;
 

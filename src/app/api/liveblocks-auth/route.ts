@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase-server";
 import { Liveblocks } from "@liveblocks/node";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 const liveblocks = new Liveblocks({
     secret: process.env.LIVEBLOCKS_SECRET_KEY!,
 });
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: Request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
