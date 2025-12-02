@@ -156,9 +156,7 @@ describe('CharacterCalculator', () => {
     });
 
     it('should apply SessionContext', () => {
-        const logs: CharacterLogEntry[] = [
-            { id: '1', type: 'GROW_STAT', timestamp: 1, statGrowth: { key: 'Body', value: 10, cost: 0 } },
-        ];
+
         const logs2: CharacterLogEntry[] = [];
         const sessionContext: CharacterCalculator.SessionContext = {
             tempStats: { 'Strength': 5 },

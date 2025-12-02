@@ -1,11 +1,10 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { DicePanel, DiceRoller, RollResult, SessionLogEntry } from '../../session';
-import { SessionCalculator } from '../../session/domain/SessionCalculator';
-import { CharacterCalculator } from '../domain/CharacterCalculator';
+import { DicePanel, SessionLogEntry } from '../../session';
 import { CharacterLogEntry, CharacterState, Item, Skill } from '../domain/CharacterLog';
-import { JAPANESE_TO_ENGLISH_STATS } from '../domain/constants';
+import { useCharacterDisplayState } from '../hooks/useCharacterDisplayState';
+import { useCharacterSession } from '../hooks/useCharacterSession';
 import { CharacterHeader } from './CharacterHeader';
 import { BioPanel } from './sheet/BioPanel';
 import { EquipmentPanel } from './sheet/EquipmentPanel';
@@ -39,7 +38,7 @@ interface CharacterSheetProps {
     isAdmin?: boolean;
     onDeleteCharacter?: () => void;
 }
-export const CharacterSheet: React.FC<CharacterSheetProps> = ({
+export function CharacterSheet({
     name,
     character,
     state,
@@ -49,8 +48,7 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
     onNameChange,
     onAvatarChange,
     onUpdateProfile,
-    initialLogs,
-    onSave,
+
     currentUserId,
     ownerId,
     ownerName,
@@ -59,11 +57,11 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
     onDeleteCharacter,
     isEditMode: propIsEditMode,
     onToggleEditMode,
-}) => {
+}: CharacterSheetProps) {
     // State
     // const [logs, setLogs] = useState<SessionLogEntry[]>(initialLogs); // Removed to avoid shadowing and use prop
     const [localIsEditMode, setLocalIsEditMode] = useState(false);
-    const [activeTab, setActiveTab] = useState("status");
+    // const [activeTab, setActiveTab] = useState("status");
 
     const isEditMode = propIsEditMode !== undefined ? propIsEditMode : localIsEditMode;
 
@@ -90,153 +88,20 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
         }
     }, [canEdit, isEditMode, onToggleEditMode]);
 
-    // Ephemeral State (Session Scope)
-    const [resourceValues, setResourceValues] = useState<Record<string, number>>({});
-    const [rollHistory, setRollHistory] = useState<RollResult[]>([]);
-
-    // Initialize resource values on load or when definitions change
-    useEffect(() => {
-        // We use setTimeout to defer the state update, moving it out of the render cycle
-        // This solves the "set-state-in-effect" lint error while preserving functionality.
-        const timer = setTimeout(() => {
-            setResourceValues(prev => {
-                const initialValues: Record<string, number> = {};
-                state.resources.forEach(r => {
-                    // Preserve current value if exists, otherwise set to initial
-                    initialValues[r.id] = prev[r.id] ?? r.initial;
-                });
-                return initialValues;
-            });
-        }, 0);
-        return () => clearTimeout(timer);
-    }, [state.resources]);
-
-    // Handle Log Commands (Ephemeral)
-    const handleLogCommand = (log: SessionLogEntry) => {
-        // Delegate state calculation to SessionCalculator
-        const nextValues = SessionCalculator.applyLog(resourceValues, log, state);
-
-        // If values changed, update state and add feedback
-        if (nextValues !== resourceValues) {
-            setResourceValues(nextValues);
-
-            // Generate Feedback
-            let feedbackDetails = '';
-            let feedbackTotal = 0;
-
-            if (log.type === 'UPDATE_RESOURCE' && log.resourceUpdate) {
-                const { resourceId } = log.resourceUpdate;
-                // Find definition for name
-                const resource = state.resources.find(r => r.id.toLowerCase() === resourceId.toLowerCase() || r.name === resourceId)
-                    || (['HP', 'MP'].includes(resourceId.toUpperCase()) ? { name: resourceId.toUpperCase(), id: resourceId.toUpperCase() } : null);
-
-                const name = resource?.name || resourceId;
-                const val = nextValues[resource?.id || resourceId] ?? 0;
-
-                feedbackDetails = log.description || `Updated ${name}`;
-                feedbackTotal = val;
-            } else if (log.type === 'RESET_RESOURCES') {
-                feedbackDetails = log.description || 'Reset All Resources';
-            }
-
-            if (feedbackDetails) {
-                const feedback: RollResult = {
-                    formula: 'Command',
-                    total: feedbackTotal,
-                    details: feedbackDetails,
-                    isCritical: false,
-                    isFumble: false
-                };
-                setRollHistory(prev => [feedback, ...prev]);
-            }
-        } else {
-            // Handle error feedback if needed (e.g. resource not found)
-            // SessionCalculator currently returns original if no change/not found.
-            // We might want it to return a result object with success/error.
-            // For now, simple integration.
-            if (log.type === 'UPDATE_RESOURCE' && log.resourceUpdate) {
-                // Check if it was a failure to find resource
-                // This logic is a bit duplicated, but acceptable for now.
-            }
-        }
-    };
+    // Ephemeral State & Logic (Session Scope)
+    const {
+        resourceValues,
+        logs: sessionLogs,
+        handleLog,
+        performRoll
+    } = useCharacterSession(state);
 
     // Calculate Display State (Reactive to Resource Changes)
-    const displayState = useMemo(() => {
-        // Clone state to avoid mutation
-        const next: CharacterState = {
-            ...state,
-            stats: { ...state.stats },
-            derivedStats: { ...state.derivedStats }
-        };
+    const displayState = useCharacterDisplayState(state, resourceValues);
 
-        // Prepare overrides with current resource values
-        const overrides: Record<string, number> = {};
-        state.resources.forEach(r => {
-            const val = resourceValues[r.id] ?? r.initial;
-            overrides[r.name] = val;
-            // Also override by ID if different (e.g. "HP" vs "Hit Points")
-            if (r.id !== r.name) overrides[r.id] = val;
-        });
-
-        // Helper to re-calculate dynamic modifiers
-        const applyDynamicUpdates = (modifiers: Record<string, string> | undefined) => {
-            if (!modifiers) return;
-            for (const [key, formula] of Object.entries(modifiers)) {
-                const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-
-                // Calculate with initial values (Max HP etc) - this is what is currently in state.stats
-                const initialVal = CharacterCalculator.evaluateFormula(formula, state);
-
-                // Calculate with current values
-                const currentVal = CharacterCalculator.evaluateFormula(formula, state, overrides);
-
-                const delta = currentVal - initialVal;
-                if (delta !== 0) {
-                    next.stats[normalizedKey] = (next.stats[normalizedKey] || 0) + delta;
-                }
-            }
-        };
-
-        // Re-apply all dynamic modifiers
-        state.equipment.forEach(i => applyDynamicUpdates(i.dynamicModifiers));
-        state.skills.forEach(s => applyDynamicUpdates(s.dynamicModifiers));
-
-        // Recalculate Derived Stats (e.g. Attack, Defense which might depend on modified stats or resources)
-        const formulas = CharacterCalculator.getFormulas(state);
-        CharacterCalculator.calculateDerivedStats(next, formulas, overrides);
-
-        return next;
-    }, [state, resourceValues]);
-
-    // Handle Rolls (Ephemeral)
-    const handleRoll = (result: RollResult) => {
-        setRollHistory(prev => [result, ...prev]);
-
-        // Also add to persistent log if needed?
-        // The requirement was "Test Dice Roller", so maybe ephemeral is fine.
-        // But wait, the user said "Character Sheet's test dice roller is broken".
-    };
-
-    // Helper for quick rolls
-    const performRoll = (formula: string, description?: string) => {
-        // Use displayState as base so we get updated stats (e.g. Attack)
-        const tempState = { ...displayState };
-
-        // Inject current resource values into stats so {HP} works in the roll formula itself
-        state.resources.forEach(r => {
-            const val = resourceValues[r.id] ?? r.initial;
-            tempState.stats = { ...tempState.stats, [r.name]: val };
-        });
-
-        const result = DiceRoller.roll(formula, tempState, JAPANESE_TO_ENGLISH_STATS);
-
-        // Add description to result details if present
-        if (description) {
-            result.details += ` ${description}`;
-        }
-
-        handleRoll(result);
+    // Helper for quick rolls (Wrapped for components)
+    const onRoll = (formula: string, description?: string) => {
+        performRoll(formula, displayState, description);
     };
 
     // Handle Stat Growth
@@ -328,7 +193,7 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
                             <StatsPanel
                                 state={state}
                                 displayState={displayState}
-                                onRoll={performRoll}
+                                onRoll={onRoll}
                                 isEditMode={isEditMode}
                                 onGrow={handleStatGrowth}
                             />
@@ -347,7 +212,7 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
                             <SkillsPanel
                                 state={state}
                                 onAddLog={onAddLog}
-                                onRoll={performRoll}
+                                onRoll={onRoll}
                                 isEditMode={isEditMode}
                                 onAddSkill={handleAddSkill}
                                 onUpdateSkill={handleUpdateSkill}
@@ -359,7 +224,7 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
                             <EquipmentPanel
                                 state={state}
                                 onAddLog={onAddLog}
-                                onRoll={performRoll}
+                                onRoll={onRoll}
                                 isEditMode={isEditMode}
                                 onAddItem={handleAddItem}
                                 onUpdateItem={handleUpdateItem}
@@ -396,9 +261,11 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
                     <DicePanel
                         state={state}
                         resourceValues={resourceValues}
-                        rollHistory={rollHistory}
-                        onRoll={handleRoll}
-                        onLogCommand={handleLogCommand}
+                        logs={sessionLogs}
+                        onLog={handleLog}
+                        currentUserId={currentUserId}
+                        fixedIdentity={{ id: characterId || 'temp', name: name }}
+                        className="h-[600px]"
                     />
                 </div>
             </div>

@@ -1,3 +1,5 @@
+import { AppError } from '@/domain/shared/AppError';
+import { Result } from '@/domain/shared/Result';
 import { CharacterLogEntry } from '../CharacterLog';
 
 export interface CharacterData {
@@ -17,10 +19,10 @@ export interface CharacterData {
 }
 
 export interface ICharacterRepository {
-    save(character: CharacterData): Promise<void>;
-    load(id: string): Promise<CharacterData | null>;
-    listAll(): Promise<CharacterData[]>;
-    delete(id: string): Promise<void>;
+    save(character: CharacterData): Promise<Result<void, AppError>>;
+    load(id: string): Promise<Result<CharacterData, AppError>>;
+    listAll(): Promise<Result<CharacterData[], AppError>>;
+    delete(id: string): Promise<Result<void, AppError>>;
     // In a real app, we might have methods to append logs specifically
     // appendLog(characterId: string, log: CharacterLogEntry): Promise<void>;
 }

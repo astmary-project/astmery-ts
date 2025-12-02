@@ -17,7 +17,7 @@ export function useUserSession(initialUser: SupabaseUser | null | undefined) {
                     .from('user_profiles')
                     .select('display_name')
                     .eq('user_id', user.id)
-                    .single();
+                    .maybeSingle();
                 if (data?.display_name) {
                     setProfileName(data.display_name);
                 }
@@ -33,7 +33,7 @@ export function useUserSession(initialUser: SupabaseUser | null | undefined) {
                     .from('user_profiles')
                     .select('display_name')
                     .eq('user_id', session.user.id)
-                    .single()
+                    .maybeSingle()
                     .then(({ data }) => {
                         if (data?.display_name) setProfileName(data.display_name);
                     });

@@ -1,4 +1,6 @@
 import { all, create } from 'mathjs';
+import { AppError } from '../shared/AppError';
+import { Result, err, ok } from '../shared/Result';
 
 const math = create(all, {
     number: 'number',
@@ -24,7 +26,7 @@ export class DiceRoller {
      * Supports standard notation: XdY (e.g., 2d6, 1d100).
      * Replaces XdY with random values and evaluates the expression.
      */
-    public static roll(formula: string, context: RollContext, aliases: Record<string, string> = {}): RollResult {
+    public static roll(formula: string, context: RollContext, aliases: Record<string, string> = {}): Result<RollResult, AppError> {
         // 1. Handle Comments
         const [formulaPart, ...commentParts] = formula.split('#');
         const comment = commentParts.join('#').trim();
@@ -81,8 +83,7 @@ export class DiceRoller {
             total = math.evaluate(evalString, {});
         } catch (e) {
             // If evaluation fails, it's likely a chat message or invalid formula.
-            // Return NaN to indicate no calculation result.
-            total = NaN;
+            return err(AppError.calculation(`Invalid formula: ${formula}`, e));
         }
 
         // Append comment if present
@@ -90,12 +91,12 @@ export class DiceRoller {
             details += ` # ${comment}`;
         }
 
-        return {
+        return ok({
             formula,
             total,
             details,
             isCritical,
             isFumble
-        };
+        });
     }
 }

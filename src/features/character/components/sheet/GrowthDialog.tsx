@@ -6,7 +6,7 @@ import React from 'react';
 interface GrowthDialogProps {
     isOpen: boolean;
     onClose: () => void;
-    statKey: string;
+
     statLabel: string;
     currentValue: number;
     currentExp: number;
@@ -17,7 +17,6 @@ interface GrowthDialogProps {
 export const GrowthDialog: React.FC<GrowthDialogProps> = ({
     isOpen,
     onClose,
-    statKey,
     statLabel,
     currentValue,
     currentExp,

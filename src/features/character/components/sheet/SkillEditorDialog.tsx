@@ -49,7 +49,7 @@ export const SkillEditorDialog: React.FC<SkillEditorDialogProps> = ({
             }, 0);
             return () => clearTimeout(timer);
         }
-    }, [isOpen]); // initialSkill intentionally omitted to avoid reset on edit
+    }, [isOpen, initialSkill]); // initialSkill intentionally omitted to avoid reset on edit
 
     const handleChange = (field: keyof Skill, value: string) => {
         setSkill(prev => ({ ...prev, [field]: value }));
