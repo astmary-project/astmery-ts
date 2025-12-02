@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { BookOpen, Home, Settings, User } from 'lucide-react';
+import { BookOpen, Home, MessageSquare, Settings, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -33,6 +33,12 @@ export function SidebarContent({ className, user, profileName, onLinkClick }: Si
             active: pathname.startsWith('/character'),
         },
         {
+            label: 'Sessions',
+            icon: MessageSquare,
+            href: '/room',
+            active: pathname.startsWith('/room'),
+        },
+        {
             label: 'Rules',
             icon: BookOpen,
             href: '/rules', // Placeholder
@@ -48,7 +54,7 @@ export function SidebarContent({ className, user, profileName, onLinkClick }: Si
 
     return (
         <div className={cn("flex flex-col h-full bg-background", className)}>
-            <div className="space-y-4 py-4 flex-1">
+            <div className="space-y-4 py-4 flex-1 overflow-y-auto">
                 <div className="px-3 py-2">
                     <div className="space-y-1">
                         {routes.map((route) => (

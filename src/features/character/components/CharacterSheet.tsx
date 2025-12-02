@@ -92,9 +92,8 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
     // Ephemeral State & Logic (Session Scope)
     const {
         resourceValues,
-        rollHistory,
-        handleLogCommand,
-        handleRoll,
+        logs: sessionLogs,
+        handleLog,
         performRoll
     } = useCharacterSession(state);
 
@@ -263,9 +262,11 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
                     <DicePanel
                         state={state}
                         resourceValues={resourceValues}
-                        rollHistory={rollHistory}
-                        onRoll={handleRoll}
-                        onLogCommand={handleLogCommand}
+                        logs={sessionLogs}
+                        onLog={handleLog}
+                        currentUserId={currentUserId}
+                        fixedIdentity={{ id: characterId || 'temp', name: name }}
+                        className="h-[600px]"
                     />
                 </div>
             </div>

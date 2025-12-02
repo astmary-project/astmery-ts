@@ -1,4 +1,4 @@
-import { DiceRoller, RollResult } from '@/domain/dice/DiceRoller';
+import { DiceRoller } from '@/domain/dice/DiceRoller';
 import { useEffect, useState } from 'react';
 import { SessionLogEntry } from '../../session';
 import { SessionCalculator } from '../../session/domain/SessionCalculator';
@@ -8,7 +8,7 @@ import { JAPANESE_TO_ENGLISH_STATS } from '../domain/constants';
 export const useCharacterSession = (state: CharacterState) => {
     // Ephemeral State (Session Scope)
     const [resourceValues, setResourceValues] = useState<Record<string, number>>({});
-    const [rollHistory, setRollHistory] = useState<RollResult[]>([]);
+    const [logs, setLogs] = useState<SessionLogEntry[]>([]);
 
     // Initialize resource values on load or when definitions change
     useEffect(() => {
@@ -26,8 +26,10 @@ export const useCharacterSession = (state: CharacterState) => {
         return () => clearTimeout(timer);
     }, [state.resources]);
 
-    // Handle Log Commands (Ephemeral)
-    const handleLogCommand = (log: SessionLogEntry) => {
+    // Handle Log (Ephemeral)
+    const handleLog = (log: SessionLogEntry) => {
+        setLogs(prev => [log, ...prev]);
+
         // Delegate state calculation to SessionCalculator
         const nextValues = SessionCalculator.applyLog(resourceValues, log, state);
 
@@ -35,41 +37,11 @@ export const useCharacterSession = (state: CharacterState) => {
         if (nextValues !== resourceValues) {
             setResourceValues(nextValues);
 
-            // Generate Feedback
-            let feedbackDetails = '';
-            let feedbackTotal = 0;
-
-            if (log.type === 'UPDATE_RESOURCE' && log.resourceUpdate) {
-                const { resourceId } = log.resourceUpdate;
-                // Find definition for name
-                const resource = state.resources.find(r => r.id.toLowerCase() === resourceId.toLowerCase() || r.name === resourceId)
-                    || (['HP', 'MP'].includes(resourceId.toUpperCase()) ? { name: resourceId.toUpperCase(), id: resourceId.toUpperCase() } : null);
-
-                const name = resource?.name || resourceId;
-                const val = nextValues[resource?.id || resourceId] ?? 0;
-
-                feedbackDetails = log.description || `Updated ${name}`;
-                feedbackTotal = val;
-            } else if (log.type === 'RESET_RESOURCES') {
-                feedbackDetails = log.description || 'Reset All Resources';
-            }
-
-            if (feedbackDetails) {
-                const feedback: RollResult = {
-                    formula: 'Command',
-                    total: feedbackTotal,
-                    details: feedbackDetails,
-                    isCritical: false,
-                    isFumble: false
-                };
-                setRollHistory(prev => [feedback, ...prev]);
-            }
+            // Generate Feedback Log if needed (e.g. for resource updates)
+            // Note: In the new DicePanel, we might not need explicit feedback logs if the UI updates reactively.
+            // But if we want to show "HP updated to 15" in the log stream, we should add a system log.
+            // For now, let's assume the original log (UPDATE_RESOURCE) is sufficient for display.
         }
-    };
-
-    // Handle Rolls (Ephemeral)
-    const handleRoll = (result: RollResult) => {
-        setRollHistory(prev => [result, ...prev]);
     };
 
     // Helper for quick rolls
@@ -87,7 +59,7 @@ export const useCharacterSession = (state: CharacterState) => {
 
         if (result.isFailure) {
             console.error(result.error);
-            // Optionally add error feedback to history
+            // Optionally add error feedback to logs
             return;
         }
 
@@ -98,14 +70,19 @@ export const useCharacterSession = (state: CharacterState) => {
             rollResult.details += ` ${description}`;
         }
 
-        handleRoll(rollResult);
+        handleLog({
+            id: crypto.randomUUID(),
+            type: 'ROLL',
+            timestamp: Date.now(),
+            diceRoll: rollResult,
+            channel: 'main'
+        });
     };
 
     return {
         resourceValues,
-        rollHistory,
-        handleLogCommand,
-        handleRoll,
+        logs,
+        handleLog,
         performRoll
     };
 };

@@ -6,7 +6,8 @@ export type AppErrorCode =
     | 'RESOURCE_NOT_FOUND'
     | 'CALCULATION_ERROR'
     | 'INTERNAL_ERROR'
-    | 'NOT_IMPLEMENTED';
+    | 'NOT_IMPLEMENTED'
+    | 'UNAUTHORIZED';
 
 /**
  * Base class for application errors.
@@ -36,5 +37,9 @@ export class AppError extends Error {
 
     static internal(message: string, cause?: unknown): AppError {
         return new AppError('INTERNAL_ERROR', message, cause);
+    }
+
+    static unauthorized(message: string, cause?: unknown): AppError {
+        return new AppError('UNAUTHORIZED', message, cause);
     }
 }
