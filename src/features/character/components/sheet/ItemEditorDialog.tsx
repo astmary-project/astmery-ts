@@ -41,7 +41,7 @@ export const ItemEditorDialog: React.FC<ItemEditorDialogProps> = ({
             }, 0);
             return () => clearTimeout(timer);
         }
-    }, [isOpen]); // initialItem intentionally omitted to avoid reset on edit
+    }, [isOpen, initialItem]); // initialItem intentionally omitted to avoid reset on edit
 
     const handleChange = (field: keyof Item, value: string) => {
         setItem(prev => ({ ...prev, [field]: value }));

@@ -45,13 +45,6 @@ export const BioPanel: React.FC<BioPanelProps> = ({
         }
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            handleAddTag();
-        }
-    };
-
     return (
         <div className="space-y-6">
             {/* Character Settings (Bio) */}

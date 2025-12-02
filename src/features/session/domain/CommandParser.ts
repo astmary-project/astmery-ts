@@ -25,7 +25,7 @@ export class CommandParser {
         // Regex: : (Name) (=|+/-) (Value)
         const match = trimmed.match(/^:([^=+\-]+)([=+\-])(.+)$/);
         if (match) {
-            const resourceId = match[1].trim();
+            const resourceId = match[1].trim().toLowerCase();
             const operator = match[2];
             const valueStr = match[3].trim().toLowerCase();
 

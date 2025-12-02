@@ -20,7 +20,7 @@ export class Ok<T, E> {
     /**
      * Maps the error if failure, otherwise returns the value as is.
      */
-    mapErr<F>(f: (error: E) => F): Result<T, F> {
+    mapErr<F>(_f: (error: E) => F): Result<T, F> {
         return new Ok(this.value);
     }
 
@@ -38,7 +38,7 @@ export class Err<T, E> {
 
     constructor(public readonly error: E) { }
 
-    map<U>(f: (value: T) => U): Result<U, E> {
+    map<U>(_f: (value: T) => U): Result<U, E> {
         return new Err(this.error);
     }
 
@@ -46,7 +46,7 @@ export class Err<T, E> {
         return new Err(f(this.error));
     }
 
-    andThen<U>(f: (value: T) => Result<U, E>): Result<U, E> {
+    andThen<U>(_f: (value: T) => Result<U, E>): Result<U, E> {
         return new Err(this.error);
     }
 }

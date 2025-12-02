@@ -70,12 +70,7 @@ export const StatsPanel = ({ state, displayState, onRoll, isEditMode = false, on
         setGrowthTarget({ key, label, value });
     };
 
-    const handleGrowthConfirm = () => {
-        if (growthTarget && onGrow) {
-            onGrow(growthTarget.key, 10); // Fixed cost for now
-            setGrowthTarget(null);
-        }
-    };
+
 
     return (
         <div className="space-y-6">
@@ -169,7 +164,7 @@ export const StatsPanel = ({ state, displayState, onRoll, isEditMode = false, on
                 <GrowthDialog
                     isOpen={!!growthTarget}
                     onClose={() => setGrowthTarget(null)}
-                    statKey={growthTarget.key}
+
                     statLabel={growthTarget.label}
                     currentValue={growthTarget.value}
                     currentExp={state.exp.free}

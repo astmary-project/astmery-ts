@@ -184,7 +184,7 @@ export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
                 <GrowthDialog
                     isOpen={showGradeGrowth}
                     onClose={() => setShowGradeGrowth(false)}
-                    statKey="Grade"
+
                     statLabel="グレード"
                     currentValue={grade}
                     currentExp={exp.free}

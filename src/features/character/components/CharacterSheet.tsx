@@ -38,7 +38,7 @@ interface CharacterSheetProps {
     isAdmin?: boolean;
     onDeleteCharacter?: () => void;
 }
-export const CharacterSheet: React.FC<CharacterSheetProps> = ({
+export function CharacterSheet({
     name,
     character,
     state,
@@ -48,8 +48,7 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
     onNameChange,
     onAvatarChange,
     onUpdateProfile,
-    initialLogs,
-    onSave,
+
     currentUserId,
     ownerId,
     ownerName,
@@ -58,11 +57,11 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
     onDeleteCharacter,
     isEditMode: propIsEditMode,
     onToggleEditMode,
-}) => {
+}: CharacterSheetProps) {
     // State
     // const [logs, setLogs] = useState<SessionLogEntry[]>(initialLogs); // Removed to avoid shadowing and use prop
     const [localIsEditMode, setLocalIsEditMode] = useState(false);
-    const [activeTab, setActiveTab] = useState("status");
+    // const [activeTab, setActiveTab] = useState("status");
 
     const isEditMode = propIsEditMode !== undefined ? propIsEditMode : localIsEditMode;
 
@@ -92,9 +91,8 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
     // Ephemeral State & Logic (Session Scope)
     const {
         resourceValues,
-        rollHistory,
-        handleLogCommand,
-        handleRoll,
+        logs: sessionLogs,
+        handleLog,
         performRoll
     } = useCharacterSession(state);
 
@@ -263,9 +261,11 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
                     <DicePanel
                         state={state}
                         resourceValues={resourceValues}
-                        rollHistory={rollHistory}
-                        onRoll={handleRoll}
-                        onLogCommand={handleLogCommand}
+                        logs={sessionLogs}
+                        onLog={handleLog}
+                        currentUserId={currentUserId}
+                        fixedIdentity={{ id: characterId || 'temp', name: name }}
+                        className="h-[600px]"
                     />
                 </div>
             </div>

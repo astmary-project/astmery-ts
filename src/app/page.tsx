@@ -63,20 +63,22 @@ export default async function Home() {
           </Card>
         </Link>
 
-        <Card className="h-full opacity-50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="w-6 h-6" />
-              Sessions (Coming Soon)
-            </CardTitle>
-            <CardDescription>
-              Manage TRPG sessions.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="ghost" disabled className="w-full">Coming Soon</Button>
-          </CardContent>
-        </Card>
+        <Link href="/room">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="w-6 h-6" />
+                Sessions
+              </CardTitle>
+              <CardDescription>
+                Manage TRPG sessions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button className="w-full">Join Session</Button>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </div>
   );

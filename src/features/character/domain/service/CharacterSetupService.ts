@@ -133,7 +133,6 @@ export class CharacterSetupService {
         const isStrDiff = (a?: string, b?: string) => (a || '') !== (b || '');
 
         // 3. Skills Diff
-        const initialSkillIds = new Set(currentSkills.map(s => s.id));
         const currentSkillIds = new Set(newSkills.map(s => s.id));
 
         // Removed Skills
@@ -254,26 +253,12 @@ export class CharacterSetupService {
 
                 // Only check derived fields if basic fields matched AND effect string changed
                 // OR if we suspect derived fields might be out of sync (though we trust effect string as source of truth)
-                // Actually, if effect string matches, we should assume derived fields match to avoid "unnecessary" updates.
-                // But if the user manually edited the JSON, we might want to correct it?
-                // The user complaint is about "unnecessary" updates, so we prioritize stability.
-                if (!isDiff && isEffectChanged) {
-                    // This block is unreachable because isEffectChanged implies isDiff is true.
-                    // Logic correction: We check derived fields ONLY if we haven't found a diff yet?
-                    // No, if effect changed, we ARE diff.
-                    // The question is: if effect did NOT change, do we check derived fields?
-                    // If we don't, we solve the user's problem.
-                } else if (!isDiff && !isEffectChanged) {
-                    // Effect string is same. Check derived fields just in case, but use canonicalization.
-                    // If canonicalized forms differ, it's a diff.
-                    // But wait, if effect is same, why would derived differ?
-                    // 1. Parser logic changed.
-                    // 2. Initial data was manual/legacy.
-                    // If we want to avoid "every time" updates, we should be very lenient here.
-                    // If we assume effect string is source of truth, we can skip this.
-                    // BUT, if we skip this, we never migrate legacy data structure (like adding min:0).
-                    // So we SHOULD check, but with robust comparison.
-
+                // Actually, if effect string matches, we ARE diff.
+                // The question is: if effect did NOT change, do we check derived fields?
+                // If we don't, we solve the user's problem.
+                // BUT, if we skip this, we never migrate legacy data structure (like adding min:0).
+                // So we SHOULD check, but with robust comparison.
+                if (!isDiff && !isEffectChanged) {
                     isDiff = canonicalize(initialModifiers) !== canonicalize(statModifiers) ||
                         canonicalize(initialDynamic) !== canonicalize(dynamicModifiers) ||
                         canonicalize(initialGrantedStats) !== canonicalize(grantedStats) ||
@@ -298,7 +283,6 @@ export class CharacterSetupService {
         }
 
         // 4. Equipment Diff
-        const initialItemIds = new Set(currentEquipment.map(i => i.id));
         const currentItemIds = new Set(newEquipment.map(i => i.id));
 
         // Removed Items
