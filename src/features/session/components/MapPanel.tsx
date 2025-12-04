@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { useSelf } from '@/liveblocks.config';
 import { Edit, Grid, Image as ImageIcon, Map as MapIcon, Monitor, Plus, Trash2 } from 'lucide-react';
 /* eslint-disable @next/next/no-img-element */
+import { AssetPicker } from '@/features/assets/components/AssetPicker';
 import React, { useRef, useState } from 'react';
 import { MapToken, ScreenPanel, SessionLogEntry } from '../domain/SessionLog';
 
@@ -638,11 +639,18 @@ export function MapPanel({ backgroundImageUrl, backgroundWidth = 2000, backgroun
                                             <div className="space-y-1">
                                                 <h4 className="font-medium text-xs text-muted-foreground">Map Image (Foreground)</h4>
                                                 <div className="flex flex-col gap-2">
-                                                    <Input
-                                                        placeholder="Map URL"
-                                                        value={newBgUrl}
-                                                        onChange={(e) => setNewBgUrl(e.target.value)}
-                                                    />
+                                                    <div className="flex gap-2">
+                                                        <Input
+                                                            placeholder="Map URL"
+                                                            value={newBgUrl}
+                                                            onChange={(e) => setNewBgUrl(e.target.value)}
+                                                        />
+                                                        <AssetPicker
+                                                            type="image"
+                                                            onSelect={setNewBgUrl}
+                                                            trigger={<Button variant="outline" size="icon"><ImageIcon className="w-4 h-4" /></Button>}
+                                                        />
+                                                    </div>
                                                     <div className="flex gap-2">
                                                         <Input
                                                             type="number"
@@ -665,11 +673,18 @@ export function MapPanel({ backgroundImageUrl, backgroundWidth = 2000, backgroun
                                             <div className="space-y-1">
                                                 <h4 className="font-medium text-xs text-muted-foreground">Static Background (Wallpaper)</h4>
                                                 <div className="flex gap-2">
-                                                    <Input
-                                                        placeholder="Wallpaper URL"
-                                                        value={newStaticBgUrl}
-                                                        onChange={(e) => setNewStaticBgUrl(e.target.value)}
-                                                    />
+                                                    <div className="flex gap-2 flex-1">
+                                                        <Input
+                                                            placeholder="Wallpaper URL"
+                                                            value={newStaticBgUrl}
+                                                            onChange={(e) => setNewStaticBgUrl(e.target.value)}
+                                                        />
+                                                        <AssetPicker
+                                                            type="image"
+                                                            onSelect={setNewStaticBgUrl}
+                                                            trigger={<Button variant="outline" size="icon"><ImageIcon className="w-4 h-4" /></Button>}
+                                                        />
+                                                    </div>
                                                     <Button size="sm" onClick={handleStaticBackgroundUpdate}>Set</Button>
                                                 </div>
                                             </div>
@@ -730,19 +745,33 @@ export function MapPanel({ backgroundImageUrl, backgroundWidth = 2000, backgroun
                                 <TabsContent value="appearance" className="space-y-4 py-4">
                                     <div className="grid gap-2">
                                         <Label>Front Image URL</Label>
-                                        <Input
-                                            value={editingPanel.imageUrl || ''}
-                                            onChange={(e) => setEditingPanel({ ...editingPanel, imageUrl: e.target.value })}
-                                            placeholder="https://..."
-                                        />
+                                        <div className="flex gap-2">
+                                            <Input
+                                                value={editingPanel.imageUrl || ''}
+                                                onChange={(e) => setEditingPanel({ ...editingPanel, imageUrl: e.target.value })}
+                                                placeholder="https://..."
+                                            />
+                                            <AssetPicker
+                                                type="image"
+                                                onSelect={(url) => setEditingPanel({ ...editingPanel, imageUrl: url })}
+                                                trigger={<Button variant="outline" size="icon"><ImageIcon className="w-4 h-4" /></Button>}
+                                            />
+                                        </div>
                                     </div>
                                     <div className="grid gap-2">
                                         <Label>Back Image URL (Optional)</Label>
-                                        <Input
-                                            value={editingPanel.backImageUrl || ''}
-                                            onChange={(e) => setEditingPanel({ ...editingPanel, backImageUrl: e.target.value })}
-                                            placeholder="Image to show when hidden/unauthorized"
-                                        />
+                                        <div className="flex gap-2">
+                                            <Input
+                                                value={editingPanel.backImageUrl || ''}
+                                                onChange={(e) => setEditingPanel({ ...editingPanel, backImageUrl: e.target.value })}
+                                                placeholder="Image to show when hidden/unauthorized"
+                                            />
+                                            <AssetPicker
+                                                type="image"
+                                                onSelect={(url) => setEditingPanel({ ...editingPanel, backImageUrl: url })}
+                                                trigger={<Button variant="outline" size="icon"><ImageIcon className="w-4 h-4" /></Button>}
+                                            />
+                                        </div>
                                     </div>
                                     <div className="flex gap-4">
                                         <div className="grid gap-2 flex-1">
@@ -844,12 +873,18 @@ export function MapPanel({ backgroundImageUrl, backgroundWidth = 2000, backgroun
                                 <label htmlFor="image" className="text-right text-sm font-medium">
                                     Image URL
                                 </label>
-                                <Input
-                                    id="image"
-                                    value={editImageUrl}
-                                    onChange={(e) => setEditImageUrl(e.target.value)}
-                                    className="col-span-3"
-                                />
+                                <div className="col-span-3 flex gap-2">
+                                    <Input
+                                        id="image"
+                                        value={editImageUrl}
+                                        onChange={(e) => setEditImageUrl(e.target.value)}
+                                    />
+                                    <AssetPicker
+                                        type="image"
+                                        onSelect={setEditImageUrl}
+                                        trigger={<Button variant="outline" size="icon"><ImageIcon className="w-4 h-4" /></Button>}
+                                    />
+                                </div>
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <label className="text-right text-sm font-medium">

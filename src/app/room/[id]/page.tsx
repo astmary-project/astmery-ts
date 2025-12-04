@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { getRoom } from '@/features/session/actions/room';
+import { RoomHeaderMusic } from '@/features/session/components/RoomHeaderMusic';
 import { RoomPresenceIndicator } from '@/features/session/components/RoomPresenceIndicator';
 import { RoomSettingsDialog } from '@/features/session/components/RoomSettingsDialog';
 import { SessionRoomMain } from '@/features/session/components/SessionRoomMain';
@@ -35,6 +36,7 @@ export default async function SessionRoomPage({ params }: Props) {
                         <h1 className="text-xl font-bold">{room.name}</h1>
                     </div>
                     <div className="flex items-center gap-2">
+                        <RoomHeaderMusic roomId={id} />
                         <RoomPresenceIndicator />
                         <RoomSettingsDialog room={room} />
                     </div>

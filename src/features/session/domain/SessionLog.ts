@@ -19,7 +19,8 @@ export type SessionLogType =
     | 'UPDATE_PARTICIPANT' // Update a participant's state
     | 'ADD_SCREEN_PANEL' // Add a screen panel
     | 'UPDATE_SCREEN_PANEL' // Update a screen panel
-    | 'REMOVE_SCREEN_PANEL'; // Remove a screen panel
+    | 'REMOVE_SCREEN_PANEL' // Remove a screen panel
+    | 'UPDATE_BGM'; // Update background music
 
 export interface MapToken {
     id: string;
@@ -118,6 +119,15 @@ export interface SessionLogEntry {
         sender: string;
         content: string;
         avatarUrl?: string; // Added avatarUrl
+    } | null;
+
+    // For UPDATE_BGM
+    bgm?: {
+        url: string;
+        title: string;
+        volume: number;
+        isPlaying: boolean;
+        isLoop: boolean;
     } | null;
 
     // Index signature for JSON compatibility
