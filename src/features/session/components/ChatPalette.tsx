@@ -43,7 +43,7 @@ export function ChatPalette({ state, onSelect }: ChatPaletteProps) {
                                         variant="ghost"
                                         size="sm"
                                         className="justify-start h-auto py-1.5 px-2 font-normal text-left whitespace-normal"
-                                        onClick={() => handleSelect(`${label} ${formula}`)}
+                                        onClick={() => handleSelect(`${formula} ${label}`)}
                                     >
                                         <div className="flex flex-col items-start gap-0.5 w-full">
                                             <span className="font-medium text-xs">{label}</span>
