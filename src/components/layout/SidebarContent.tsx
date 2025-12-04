@@ -44,12 +44,7 @@ export function SidebarContent({ className, user, profileName, onLinkClick }: Si
             href: '/rules', // Placeholder
             active: pathname.startsWith('/rules'),
         },
-        {
-            label: 'Settings',
-            icon: Settings,
-            href: '/settings', // Placeholder
-            active: pathname.startsWith('/settings'),
-        },
+
     ];
 
     return (
