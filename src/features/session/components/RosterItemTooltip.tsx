@@ -1,6 +1,7 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { STAT_LABELS } from '@/features/character';
 import { useCharacterData } from '@/features/character/hooks/useCharacterData';
+import { cn } from '@/lib/utils';
 import { MessageSquare } from 'lucide-react';
 import { ReactNode } from 'react';
 import { SessionParticipant } from '../domain/SessionRoster';
@@ -24,14 +25,18 @@ export function RosterItemTooltip({ participant, children }: RosterItemTooltipPr
                     {children}
                 </TooltipTrigger>
                 <TooltipContent side="right" className="w-80 p-0 bg-transparent border-none shadow-none">
-                    <CharacterStatsCard characterId={participant.characterId} nextAction={participant.state.nextAction} />
+                    <CharacterStatsCard
+                        characterId={participant.characterId}
+                        nextAction={participant.state.nextAction}
+                        isPending={!!participant.state.pendingAction}
+                    />
                 </TooltipContent>
             </Tooltip>
         </TooltipProvider>
     );
 }
 
-function CharacterStatsCard({ characterId, nextAction }: { characterId: string, nextAction?: string }) {
+function CharacterStatsCard({ characterId, nextAction, isPending }: { characterId: string, nextAction?: string | null, isPending?: boolean }) {
     const { state } = useCharacterData(characterId);
 
     if (!state) return null;
@@ -47,13 +52,20 @@ function CharacterStatsCard({ characterId, nextAction }: { characterId: string, 
     return (
         <div className="bg-popover/95 backdrop-blur-sm border rounded-lg shadow-lg p-4 text-popover-foreground space-y-3">
             {/* Next Action Section */}
-            {nextAction && (
-                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-md p-2 mb-2">
+            {(nextAction || isPending) && (
+                <div className={cn(
+                    "border rounded-md p-2 mb-2",
+                    isPending ? "bg-yellow-500/10 border-yellow-500/20" : "bg-indigo-500/10 border-indigo-500/20"
+                )}>
                     <div className="flex items-center gap-2 mb-1">
-                        <MessageSquare className="w-3 h-3 text-indigo-500" />
-                        <span className="text-xs font-bold text-indigo-500 uppercase tracking-wider">Next Action</span>
+                        <MessageSquare className={cn("w-3 h-3", isPending ? "text-yellow-500" : "text-indigo-500")} />
+                        <span className={cn("text-xs font-bold uppercase tracking-wider", isPending ? "text-yellow-500" : "text-indigo-500")}>
+                            {isPending ? "Pending Action" : "Next Action"}
+                        </span>
                     </div>
-                    <p className="text-sm font-medium leading-snug break-words">{nextAction}</p>
+                    <p className={cn("text-sm font-medium leading-snug wrap-break-word", isPending ? "italic text-muted-foreground" : "")}>
+                        {isPending ? "Action is declared but hidden..." : nextAction}
+                    </p>
                 </div>
             )}
 

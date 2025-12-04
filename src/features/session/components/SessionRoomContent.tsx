@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { CharacterState } from '../../character';
 import { getCharactersStats } from '../actions/character';
 import { getLogs, saveLog } from '../actions/session';
-import { MapToken, SessionLogEntry } from '../domain/SessionLog';
+import { MapToken, ScreenPanel, SessionLogEntry } from '../domain/SessionLog';
 import { SessionParticipant } from '../domain/SessionRoster';
 import { DicePanel } from './DicePanel';
 import { MapPanel } from './MapPanel';
@@ -149,6 +149,15 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
             if (tokenIndex !== -1) {
                 acc.tokens[tokenIndex] = { ...acc.tokens[tokenIndex], ...(log.token as MapToken) };
             }
+        } else if (log.type === 'ADD_SCREEN_PANEL' && log.screenPanel) {
+            acc.screenPanels.push(log.screenPanel as ScreenPanel);
+        } else if (log.type === 'REMOVE_SCREEN_PANEL' && log.screenPanel && (log.screenPanel as ScreenPanel).id) {
+            acc.screenPanels = acc.screenPanels.filter(p => p.id !== (log.screenPanel as ScreenPanel).id);
+        } else if (log.type === 'UPDATE_SCREEN_PANEL' && log.screenPanel && (log.screenPanel as ScreenPanel).id) {
+            const panelIndex = acc.screenPanels.findIndex(p => p.id === (log.screenPanel as ScreenPanel).id);
+            if (panelIndex !== -1) {
+                acc.screenPanels[panelIndex] = { ...acc.screenPanels[panelIndex], ...(log.screenPanel as ScreenPanel) };
+            }
         }
         return acc;
     }, {
@@ -156,7 +165,8 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         backgroundWidth: undefined as number | undefined,
         backgroundHeight: undefined as number | undefined,
         staticBackgroundUrl: undefined as string | undefined,
-        tokens: [] as MapToken[]
+        tokens: [] as MapToken[],
+        screenPanels: [] as ScreenPanel[]
     });
 
     const activeTabs = logsArray.reduce((acc, log) => {
@@ -230,7 +240,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         handleLog({
             id: crypto.randomUUID(),
             type: 'ADD_PARTICIPANT',
-            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
             participant: newParticipant,
             description: `Added character: ${character.name}`
@@ -254,7 +263,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         handleLog({
             id: crypto.randomUUID(),
             type: 'ADD_PARTICIPANT',
-            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
             participant: newParticipant,
             description: `Added extra: ${name}`
@@ -269,7 +277,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
             handleLog({
                 id: crypto.randomUUID(),
                 type: 'REMOVE_PARTICIPANT',
-                // eslint-disable-next-line react-hooks/purity
                 timestamp: Date.now(),
                 participant: { ...participant }, // Pass full object or just ID if type allows, but log expects object
                 description: `Removed ${participant.name}`
@@ -281,7 +288,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         handleLog({
             id: crypto.randomUUID(),
             type: 'UPDATE_PARTICIPANT',
-            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
             participant: participant,
             description: `Updated ${participant.name}`
@@ -292,17 +298,21 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         if (!confirm('Start Combat? This will reset all initiative to 0.')) return;
 
         participants.forEach(p => {
-            if (p.state.initiative !== 0) {
+            if (p.state.initiative !== 0 || p.state.nextAction || p.state.pendingAction) {
                 handleLog({
                     id: crypto.randomUUID(),
                     type: 'UPDATE_PARTICIPANT',
-                    // eslint-disable-next-line react-hooks/purity
                     timestamp: Date.now(),
                     participant: {
                         ...p,
-                        state: { ...p.state, initiative: 0 }
+                        state: {
+                            ...p.state,
+                            initiative: 0,
+                            nextAction: null,
+                            pendingAction: null
+                        }
                     },
-                    description: `Reset Initiative for ${p.name}`
+                    description: `Reset Initiative & Actions for ${p.name}`
                 });
             }
         });
@@ -337,7 +347,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
             handleLog({
                 id: crypto.randomUUID(),
                 type: 'UPDATE_PARTICIPANT',
-                // eslint-disable-next-line react-hooks/purity
                 timestamp: Date.now(),
                 participant: {
                     ...p,
@@ -382,6 +391,7 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
                     backgroundHeight={mapState.backgroundHeight}
                     staticBackgroundImageUrl={mapState.staticBackgroundUrl}
                     tokens={mapState.tokens}
+                    screenPanels={mapState.screenPanels}
                     onLog={handleLog}
                     selectedTokenId={selectedTokenId}
                     onSelectToken={setSelectedTokenId}
@@ -433,6 +443,7 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
                             tokens={mapState.tokens}
                             participants={participants}
                             currentUserId={useSelf((me) => me.id)}
+                            currentUserName={useSelf((me) => me.info.name)}
                             selectedTokenId={selectedTokenId}
                             onSelectToken={setSelectedTokenId}
                             onUpdateLog={updateLog}

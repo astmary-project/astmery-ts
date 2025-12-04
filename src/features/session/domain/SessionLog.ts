@@ -16,7 +16,10 @@ export type SessionLogType =
     | 'UPDATE_TOKEN' // Update token properties (size, image, etc)
     | 'ADD_PARTICIPANT' // Add a participant to the roster
     | 'REMOVE_PARTICIPANT' // Remove a participant from the roster
-    | 'UPDATE_PARTICIPANT'; // Update a participant's state
+    | 'UPDATE_PARTICIPANT' // Update a participant's state
+    | 'ADD_SCREEN_PANEL' // Add a screen panel
+    | 'UPDATE_SCREEN_PANEL' // Update a screen panel
+    | 'REMOVE_SCREEN_PANEL'; // Remove a screen panel
 
 export interface MapToken {
     id: string;
@@ -30,12 +33,27 @@ export interface MapToken {
     participantId?: string; // Link to roster participant
 }
 
+export interface ScreenPanel {
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    zIndex: number;
+    imageUrl: string;
+    backImageUrl?: string;
+    memo?: string;
+    visibility: 'all' | 'owner' | 'others' | 'none';
+    ownerId: string;
+}
+
 export interface SessionLogEntry {
     id: string;
     type: SessionLogType;
     timestamp: number;
     description?: string;
     channel?: string; // Default 'main'
+    visibleTo?: string[]; // If present, only visible to these user IDs
 
     // For ADD_TAB / REMOVE_TAB
     tabId?: string | null;
@@ -56,6 +74,9 @@ export interface SessionLogEntry {
     // For ADD_TOKEN / REMOVE_TOKEN / MOVE_TOKEN / UPDATE_TOKEN
     token?: MapToken | null;
 
+    // For ADD_SCREEN_PANEL / UPDATE_SCREEN_PANEL / REMOVE_SCREEN_PANEL
+    screenPanel?: ScreenPanel | null;
+
     // For ADD_PARTICIPANT / REMOVE_PARTICIPANT / UPDATE_PARTICIPANT
     // We need to import SessionParticipant, but circular imports might be an issue if we import from SessionRoster.
     // So we'll define a compatible shape or use 'any' for now, or move SessionParticipant here.
@@ -70,7 +91,13 @@ export interface SessionLogEntry {
             hp: { current: number; max: number };
             mp: { current: number; max: number };
             initiative: number;
-            nextAction?: string;
+            nextAction?: string | null;
+            pendingAction?: {
+                description: string;
+                cost: number;
+            } | null;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            [key: string]: any;
         };
         isVisible: boolean;
     } | null;

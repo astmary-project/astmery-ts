@@ -26,7 +26,7 @@ interface RosterPanelProps {
     className?: string;
 }
 
-export function RosterPanel({ participants, onAddExtra, onAddLinked, onRemove, onStartCombat, onNextRound, className }: RosterPanelProps) {
+export function RosterPanel({ participants, onAddExtra, onAddLinked, onRemove, onUpdate, onStartCombat, onNextRound, className }: RosterPanelProps) {
     const [isAddExtraOpen, setIsAddExtraOpen] = useState(false);
     const [extraName, setExtraName] = useState('');
 
@@ -67,12 +67,45 @@ export function RosterPanel({ participants, onAddExtra, onAddLinked, onRemove, o
     // Identify Active Character (Highest Positive Initiative)
     const activeParticipantId = sortedParticipants.find(p => p.state.initiative > 0)?.id;
 
+    // Check if any participant has a pending action
+    const hasPendingActions = participants.some(p => p.state.pendingAction);
+
+    const handleRevealActions = () => {
+        if (!onUpdate) return;
+
+        participants.forEach(p => {
+            if (p.state.pendingAction) {
+                const { description, cost } = p.state.pendingAction;
+                onUpdate({
+                    ...p,
+                    state: {
+                        ...p.state,
+                        nextAction: description,
+                        initiative: p.state.initiative - cost,
+                        pendingAction: null
+                    }
+                });
+            }
+        });
+    };
+
     return (
         <Card className={cn("h-full flex flex-col min-h-0 border-none shadow-none bg-transparent", className)}>
             <CardHeader className="pb-2 px-4 pt-4 flex flex-col gap-2">
                 <div className="flex flex-row items-center justify-between w-full">
                     <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Roster</CardTitle>
                     <div className="flex gap-1">
+                        {/* Reveal Button */}
+                        {hasPendingActions && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2 text-xs border-indigo-500/50 text-indigo-500 hover:bg-indigo-500/10"
+                                onClick={handleRevealActions}
+                            >
+                                Reveal Actions
+                            </Button>
+                        )}
                         {/* Import Character Dialog */}
                         <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
                             <DialogTrigger asChild>
@@ -218,14 +251,21 @@ export function RosterPanel({ participants, onAddExtra, onAddLinked, onRemove, o
                                         </AvatarFallback>
                                     </Avatar>
                                     <div className="flex-1 min-w-0 pr-7">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <span className="font-bold text-sm truncate">{participant.name}</span>
-                                            <span className={cn(
-                                                "text-xs font-mono font-bold px-1.5 py-0.5 rounded",
-                                                participant.state.initiative > 0 ? "bg-blue-500/20 text-blue-600" : "bg-muted text-muted-foreground"
-                                            )}>
-                                                {participant.state.initiative}
-                                            </span>
+                                        <div className="flex flex-col items-start gap-0.5">
+                                            <div className="flex items-center gap-1">
+                                                {participant.state.pendingAction && (
+                                                    <span className="text-[10px] font-bold bg-yellow-500/20 text-yellow-600 px-1.5 py-0.5 rounded border border-yellow-500/30 animate-pulse">
+                                                        READY
+                                                    </span>
+                                                )}
+                                                <span className={cn(
+                                                    "text-xs font-mono font-bold px-1.5 py-0.5 rounded",
+                                                    participant.state.initiative > 0 ? "bg-blue-500/20 text-blue-600" : "bg-muted text-muted-foreground"
+                                                )}>
+                                                    {participant.state.initiative}
+                                                </span>
+                                            </div>
+                                            <span className="font-bold text-sm truncate w-full">{participant.name}</span>
                                         </div>
 
 
