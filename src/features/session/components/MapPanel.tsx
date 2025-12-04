@@ -1,20 +1,29 @@
+
 import { Button } from '@/components/ui/button';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { useSelf } from '@/liveblocks.config';
-import { ImageIcon, Plus } from 'lucide-react';
+import { Grid, Image as ImageIcon, Map as MapIcon, Plus, Trash2 } from 'lucide-react';
 import React, { useRef, useState } from 'react';
 import { MapToken, SessionLogEntry } from '../domain/SessionLog';
-import { MapToken as MapTokenComponent } from './MapToken';
 
 interface MapPanelProps {
     backgroundImageUrl?: string;
+    backgroundWidth?: number;
+    backgroundHeight?: number;
+    staticBackgroundImageUrl?: string;
     tokens: MapToken[];
     onLog: (log: SessionLogEntry) => void;
+    selectedTokenId?: string | null;
+    onSelectToken?: (id: string) => void;
 }
 
-export function MapPanel({ backgroundImageUrl, tokens, onLog }: MapPanelProps) {
-    const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
+export function MapPanel({ backgroundImageUrl, backgroundWidth = 2000, backgroundHeight = 2000, staticBackgroundImageUrl, tokens, onLog, selectedTokenId, onSelectToken }: MapPanelProps) {
+    // const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null); // Removed local state
     const [isDraggingToken, setIsDraggingToken] = useState(false);
     const [isPanning, setIsPanning] = useState(false);
 
@@ -26,9 +35,15 @@ export function MapPanel({ backgroundImageUrl, tokens, onLog }: MapPanelProps) {
     const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
     const [newBgUrl, setNewBgUrl] = useState('');
+    const [newBgWidth, setNewBgWidth] = useState('2000');
+    const [newBgHeight, setNewBgHeight] = useState('2000');
+    const [newStaticBgUrl, setNewStaticBgUrl] = useState('');
 
     const containerRef = useRef<HTMLDivElement>(null);
     const GRID_SIZE = 50;
+    // Huge world size for "infinite" feel
+    const WORLD_SIZE = 20000;
+    const WORLD_OFFSET = WORLD_SIZE / 2; // Center (0,0) in the middle of the world div
 
     const handleWheel = (e: React.WheelEvent) => {
         e.stopPropagation();
@@ -47,12 +62,10 @@ export function MapPanel({ backgroundImageUrl, tokens, onLog }: MapPanelProps) {
         const mouseY = e.clientY - containerRect.top;
 
         // Calculate point on map under mouse before zoom
-        // MapX = (MouseX - PanX) / OldScale
         const mapX = (mouseX - panOffset.x) / scale;
         const mapY = (mouseY - panOffset.y) / scale;
 
         // Calculate new pan offset to keep map point under mouse
-        // NewPanX = MouseX - MapX * NewScale
         const newPanX = mouseX - mapX * newScale;
         const newPanY = mouseY - mapY * newScale;
 
@@ -68,14 +81,25 @@ export function MapPanel({ backgroundImageUrl, tokens, onLog }: MapPanelProps) {
 
     const handleTokenMouseDown = (e: React.MouseEvent, token: MapToken) => {
         e.stopPropagation();
-        setSelectedTokenId(token.id);
+        // Only allow left-click to drag
+        if (e.button !== 0) return;
+
+        if (!containerRef.current) return;
+
+        // Select the token
+        onSelectToken?.(token.id);
         setIsDraggingToken(true);
 
-        // Calculate offset from token top-left, accounting for scale
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const mouseX = (e.clientX - containerRect.left - panOffset.x) / scale;
+        const mouseY = (e.clientY - containerRect.top - panOffset.y) / scale;
+
+        const tokenX = token.x * GRID_SIZE;
+        const tokenY = token.y * GRID_SIZE;
+
         setDragOffset({
-            x: (e.clientX - rect.left) / scale,
-            y: (e.clientY - rect.top) / scale
+            x: mouseX - tokenX,
+            y: mouseY - tokenY
         });
     };
 
@@ -92,11 +116,9 @@ export function MapPanel({ backgroundImageUrl, tokens, onLog }: MapPanelProps) {
 
         const containerRect = containerRef.current.getBoundingClientRect();
         // Adjust mouse position by pan offset and scale
-        // (Mouse - Container - Pan) / Scale
         const x = (e.clientX - containerRect.left - panOffset.x) / scale - dragOffset.x;
         const y = (e.clientY - containerRect.top - panOffset.y) / scale - dragOffset.y;
 
-        // Update preview position (in pixels relative to map origin)
         setPreviewPosition({ x, y });
     };
 
@@ -115,36 +137,61 @@ export function MapPanel({ backgroundImageUrl, tokens, onLog }: MapPanelProps) {
             const gridX = Math.round(rawX / GRID_SIZE);
             const gridY = Math.round(rawY / GRID_SIZE);
 
-            onLog({
-                id: crypto.randomUUID(),
-                type: 'MOVE_TOKEN',
-                // eslint-disable-next-line react-hooks/purity
-                timestamp: Date.now(),
-                token: {
-                    id: selectedTokenId,
-                    x: Math.max(0, gridX),
-                    y: Math.max(0, gridY),
-                    creatorId: myId, // Required by type, though maybe we should preserve original creator?
-                },
-                description: `Moved token`
-            });
+            // Check if position actually changed
+            const token = tokens.find(t => t.id === selectedTokenId);
+            if (token && (token.x !== gridX || token.y !== gridY)) {
+                onLog({
+                    id: crypto.randomUUID(),
+                    type: 'MOVE_TOKEN',
+                    // eslint-disable-next-line react-hooks/purity
+                    timestamp: Date.now(),
+                    token: {
+                        id: selectedTokenId,
+                        x: gridX, // Allow negative coordinates
+                        y: gridY,
+                        creatorId: myId,
+                    },
+                    description: `Moved token`
+                });
+            }
         }
         setIsDraggingToken(false);
         setPreviewPosition(null);
-        setSelectedTokenId(null);
+        // Do NOT clear selection on mouse up, so it stays selected
+        // setSelectedTokenId(null); 
     };
 
     const handleBackgroundUpdate = () => {
         if (!newBgUrl) return;
+        const width = parseInt(newBgWidth) || 2000;
+        const height = parseInt(newBgHeight) || 2000;
+
         onLog({
             id: crypto.randomUUID(),
             type: 'UPDATE_MAP_BACKGROUND',
             // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
-            mapBackground: { url: newBgUrl },
+            mapBackground: {
+                url: newBgUrl,
+                width,
+                height
+            },
             description: 'Updated map background'
         });
         setNewBgUrl('');
+    };
+
+    const handleStaticBackgroundUpdate = () => {
+        if (!newStaticBgUrl) return;
+        onLog({
+            id: crypto.randomUUID(),
+            type: 'UPDATE_STATIC_BACKGROUND',
+            // eslint-disable-next-line react-hooks/purity
+            timestamp: Date.now(),
+            staticBackground: { url: newStaticBgUrl },
+            description: 'Updated static background'
+        });
+        setNewStaticBgUrl('');
     };
 
     const myId = useSelf((me) => me.id);
@@ -160,7 +207,7 @@ export function MapPanel({ backgroundImageUrl, tokens, onLog }: MapPanelProps) {
         };
         onLog({
             id: crypto.randomUUID(),
-            roomId: 'demo', // TODO: Pass real room ID
+            roomId: 'demo',
             type: 'ADD_TOKEN',
             token: newToken,
             // eslint-disable-next-line react-hooks/purity
@@ -168,109 +215,354 @@ export function MapPanel({ backgroundImageUrl, tokens, onLog }: MapPanelProps) {
         });
     };
 
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        if (!containerRef.current) return;
+
+        try {
+            const data = JSON.parse(e.dataTransfer.getData('application/json'));
+            if (data.type === 'ROSTER_PARTICIPANT') {
+                const containerRect = containerRef.current.getBoundingClientRect();
+                const rawX = (e.clientX - containerRect.left - panOffset.x) / scale;
+                const rawY = (e.clientY - containerRect.top - panOffset.y) / scale;
+
+                const gridX = Math.round(rawX / GRID_SIZE);
+                const gridY = Math.round(rawY / GRID_SIZE);
+
+                const newToken: MapToken = {
+                    id: crypto.randomUUID(),
+                    name: data.name,
+                    x: gridX,
+                    y: gridY,
+                    size: data.size || 1,
+                    creatorId: myId,
+                    participantId: data.participantId, // Link to roster
+                    imageUrl: data.avatarUrl // Use avatarUrl
+                };
+
+                onLog({
+                    id: crypto.randomUUID(),
+                    roomId: 'demo', // This might need to be passed or removed if not used
+                    type: 'ADD_TOKEN',
+                    token: newToken,
+                    // eslint-disable-next-line react-hooks/purity
+                    timestamp: Date.now(),
+                    description: `Added token for ${data.name}`
+                });
+            }
+        } catch (err) {
+            console.error('Failed to parse drop data', err);
+        }
+    };
+
+    const [editingToken, setEditingToken] = useState<MapToken | null>(null);
+    const [editImageUrl, setEditImageUrl] = useState('');
+
+    const handleUpdateTokenImage = () => {
+        if (!editingToken) return;
+        onLog({
+            id: crypto.randomUUID(),
+            type: 'UPDATE_TOKEN',
+            // eslint-disable-next-line react-hooks/purity
+            timestamp: Date.now(),
+            token: {
+                ...editingToken,
+                imageUrl: editImageUrl,
+                // name and size are already updated in editingToken state by inputs
+            },
+            description: `Updated token: ${editingToken.name}`
+        });
+        setEditingToken(null);
+        setEditImageUrl('');
+    };
+
     return (
-        <div
-            className="relative w-full h-full overflow-hidden bg-muted/20 select-none group"
-            ref={containerRef}
-            onWheel={handleWheel}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={() => {
-                setIsDraggingToken(false);
-                setIsPanning(false);
-            }}
-        >
-            {/* Transform Container */}
+        <TooltipProvider>
             <div
-                className="absolute origin-top-left transition-transform duration-75 ease-linear will-change-transform"
-                style={{
-                    transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${scale})`
+                className="relative w-full h-full overflow-hidden bg-muted/10 select-none group rounded-lg border border-border/50 shadow-inner"
+                ref={containerRef}
+                onWheel={handleWheel}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={() => {
+                    setIsDraggingToken(false);
+                    setIsPanning(false);
                 }}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
             >
-                {/* Background Layer */}
-                {backgroundImageUrl ? (
+                {/* Layer 0: Static Background (Fixed) */}
+                {staticBackgroundImageUrl && (
                     <div
-                        className="absolute inset-0 bg-cover bg-center opacity-50 pointer-events-none"
-                        style={{
-                            backgroundImage: `url(${backgroundImageUrl})`,
-                            // Assuming a fixed size for the map area or letting it grow?
-                            // For now, let's give it a large fixed size or match viewport?
-                            // Actually, if we pan/zoom, we need a defined size for the map content.
-                            // Let's assume a large canvas for now, e.g. 2000x2000 or dynamic.
-                            // But `inset - 0` relies on parent size.
-                            // The transform container has 0 size by default if absolute.
-                            // We need to give it dimensions.
-                            width: '2000px',
-                            height: '2000px'
-                        }}
+                        className="absolute inset-0 bg-cover bg-center z-0 opacity-50 pointer-events-none"
+                        style={{ backgroundImage: `url(${staticBackgroundImageUrl})` }}
                     />
-                ) : (
-                    <div
-                        className="absolute flex items-center justify-center text-muted-foreground/20 pointer-events-none border-2 border-dashed border-muted-foreground/20"
-                        style={{ width: '2000px', height: '2000px' }}
-                    >
-                        No Map Background
-                    </div>
                 )}
 
-                {/* Grid Layer */}
+                {/* Transform Container */}
                 <div
-                    className="absolute pointer-events-none opacity-10"
+                    className="absolute origin-top-left transition-transform duration-75 ease-linear will-change-transform z-10"
                     style={{
-                        width: '2000px',
-                        height: '2000px',
-                        backgroundImage: `linear-gradient(to right, #000 1px, transparent 1px), linear-gradient(to bottom, #000 1px, transparent 1px)`,
-                        backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`
+                        transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${scale})`
                     }}
-                />
+                >
+                    {/* Infinite Grid Layer */}
+                    <div
+                        className="absolute pointer-events-none opacity-20"
+                        style={{
+                            left: -WORLD_OFFSET,
+                            top: -WORLD_OFFSET,
+                            width: WORLD_SIZE,
+                            height: WORLD_SIZE,
+                            backgroundImage: `linear-gradient(to right, #000 1px, transparent 1px), linear-gradient(to bottom, #000 1px, transparent 1px)`,
+                            backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
+                            // Align grid so (0,0) is at a line intersection
+                            backgroundPosition: `${WORLD_OFFSET}px ${WORLD_OFFSET}px`
+                        }}
+                    />
 
-                {/* Tokens Layer */}
-                {tokens.map(token => {
-                    const isSelected = selectedTokenId === token.id;
-                    const x = (isSelected && previewPosition) ? previewPosition.x / GRID_SIZE : token.x;
-                    const y = (isSelected && previewPosition) ? previewPosition.y / GRID_SIZE : token.y;
-
-                    return (
-                        <MapTokenComponent
-                            key={token.id}
-                            {...token}
-                            x={x}
-                            y={y}
-                            isSelected={isSelected}
-                            onMouseDown={(e: React.MouseEvent) => handleTokenMouseDown(e, token)}
+                    {/* Foreground Map Layer (at 0,0) */}
+                    {backgroundImageUrl ? (
+                        <div
+                            className="absolute top-0 left-0 bg-cover bg-center shadow-2xl"
+                            style={{
+                                backgroundImage: `url(${backgroundImageUrl})`,
+                                width: `${backgroundWidth}px`,
+                                height: `${backgroundHeight}px`
+                            }}
                         />
-                    );
-                })}
-            </div>
-
-            {/* Controls Overlay */}
-            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="bg-background/80 p-1 rounded text-xs font-mono mr-2 flex items-center">
-                    {Math.round(scale * 100)}%
-                </div>
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <Button variant="secondary" size="icon" className="shadow-md">
-                            <ImageIcon className="w-4 h-4" />
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80">
-                        <div className="flex gap-2">
-                            <Input
-                                placeholder="Image URL"
-                                value={newBgUrl}
-                                onChange={(e) => setNewBgUrl(e.target.value)}
-                            />
-                            <Button onClick={handleBackgroundUpdate}>Set</Button>
+                    ) : (
+                        <div
+                            className="absolute top-0 left-0 flex items-center justify-center pointer-events-none border-2 border-dashed border-muted-foreground/20 bg-background/10"
+                            style={{ width: '2000px', height: '2000px' }}
+                        >
+                            <div className="flex flex-col items-center gap-4 text-muted-foreground/20">
+                                <MapIcon className="w-32 h-32" />
+                                <span className="text-4xl font-bold uppercase tracking-widest">Map Area</span>
+                            </div>
                         </div>
-                    </PopoverContent>
-                </Popover>
+                    )}
 
-                <Button variant="secondary" size="icon" className="shadow-md" onClick={handleAddToken}>
-                    <Plus className="w-4 h-4" />
-                </Button>
+                    {/* Tokens Layer */}
+                    {tokens.map(token => {
+                        const isSelected = selectedTokenId === token.id;
+                        const x = (isSelected && previewPosition) ? previewPosition.x / GRID_SIZE : token.x;
+                        const y = (isSelected && previewPosition) ? previewPosition.y / GRID_SIZE : token.y;
+
+                        return (
+                            <ContextMenu key={token.id}>
+                                <ContextMenuTrigger asChild>
+                                    <div
+                                        className={cn(
+                                            "absolute flex items-center justify-center rounded-full shadow-md cursor-grab active:cursor-grabbing transition-transform hover:scale-110 border-2 overflow-hidden",
+                                            token.participantId ? "border-blue-500 bg-blue-100" : "border-primary bg-primary/20",
+                                            isDraggingToken && "cursor-grabbing"
+                                        )}
+                                        style={{
+                                            left: `${x * GRID_SIZE}px`,
+                                            top: `${y * GRID_SIZE}px`,
+                                            width: `${(token.size || 1) * GRID_SIZE}px`,
+                                            height: `${(token.size || 1) * GRID_SIZE}px`,
+                                            transform: 'translate(-50%, -50%)', // Center anchor
+                                            zIndex: 10 // Ensure tokens are above map
+                                        }}
+                                        onMouseDown={(e) => handleTokenMouseDown(e, token)}
+                                    >
+                                        {token.imageUrl ? (
+                                            <img
+                                                src={token.imageUrl}
+                                                alt={token.name}
+                                                className="w-full h-full object-cover pointer-events-none select-none"
+                                            />
+                                        ) : (
+                                            <span className="text-xs font-bold truncate max-w-full px-1 pointer-events-none select-none">
+                                                {token.name}
+                                            </span>
+                                        )}
+                                    </div>
+                                </ContextMenuTrigger>
+                                <ContextMenuContent>
+                                    <ContextMenuItem
+                                        onClick={() => {
+                                            setEditingToken(token);
+                                            setEditImageUrl(token.imageUrl || '');
+                                        }}
+                                    >
+                                        <ImageIcon className="w-4 h-4 mr-2" />
+                                        Token Details...
+                                    </ContextMenuItem>
+                                    <ContextMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onClick={() => {
+                                            onLog({
+                                                id: crypto.randomUUID(),
+                                                roomId: 'demo',
+                                                type: 'REMOVE_TOKEN',
+                                                token: token,
+                                                // eslint-disable-next-line react-hooks/purity
+                                                timestamp: Date.now(),
+                                                description: `Removed token: ${token.name}`
+                                            });
+                                        }}
+                                    >
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Delete Token
+                                    </ContextMenuItem>
+                                </ContextMenuContent>
+                            </ContextMenu>
+                        );
+                    })}
+                </div>
+
+                {/* Controls Overlay */}
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-auto z-20">
+                    <div className="bg-background/80 backdrop-blur-md p-1.5 rounded-md border shadow-lg flex items-center gap-2">
+                        <div className="text-xs font-mono text-center px-2 border-r mr-1">
+                            {Math.round(scale * 100)}%
+                        </div>
+
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 hover:text-primary">
+                                            <ImageIcon className="w-4 h-4" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-80" align="center">
+                                        <div className="flex flex-col gap-3">
+                                            <div className="space-y-1">
+                                                <h4 className="font-medium text-xs text-muted-foreground">Map Image (Foreground)</h4>
+                                                <div className="flex flex-col gap-2">
+                                                    <Input
+                                                        placeholder="Map URL"
+                                                        value={newBgUrl}
+                                                        onChange={(e) => setNewBgUrl(e.target.value)}
+                                                    />
+                                                    <div className="flex gap-2">
+                                                        <Input
+                                                            type="number"
+                                                            placeholder="Width"
+                                                            value={newBgWidth}
+                                                            onChange={(e) => setNewBgWidth(e.target.value)}
+                                                            className="w-20"
+                                                        />
+                                                        <Input
+                                                            type="number"
+                                                            placeholder="Height"
+                                                            value={newBgHeight}
+                                                            onChange={(e) => setNewBgHeight(e.target.value)}
+                                                            className="w-20"
+                                                        />
+                                                        <Button size="sm" onClick={handleBackgroundUpdate} className="flex-1">Set</Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <h4 className="font-medium text-xs text-muted-foreground">Static Background (Wallpaper)</h4>
+                                                <div className="flex gap-2">
+                                                    <Input
+                                                        placeholder="Wallpaper URL"
+                                                        value={newStaticBgUrl}
+                                                        onChange={(e) => setNewStaticBgUrl(e.target.value)}
+                                                    />
+                                                    <Button size="sm" onClick={handleStaticBackgroundUpdate}>Set</Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">Background Settings</TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 hover:text-primary" onClick={handleAddToken}>
+                                    <Plus className="w-4 h-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">Add Token</TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 hover:text-primary">
+                                    <Grid className="w-4 h-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">Toggle Grid (WIP)</TooltipContent>
+                        </Tooltip>
+                    </div>
+                </div>
+
+                {/* Edit Token Details Dialog */}
+                <Dialog open={!!editingToken} onOpenChange={(open) => !open && setEditingToken(null)}>
+                    <DialogContent className="sm:max-w-[425px]">
+                        <DialogHeader>
+                            <DialogTitle>Token Details</DialogTitle>
+                            <DialogDescription>
+                                Configure the appearance and properties of this token.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label htmlFor="name" className="text-right text-sm font-medium">
+                                    Name
+                                </label>
+                                <Input
+                                    id="name"
+                                    value={editingToken?.name || ''}
+                                    onChange={(e) => editingToken && setEditingToken({ ...editingToken, name: e.target.value })}
+                                    className="col-span-3"
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label htmlFor="image" className="text-right text-sm font-medium">
+                                    Image URL
+                                </label>
+                                <Input
+                                    id="image"
+                                    value={editImageUrl}
+                                    onChange={(e) => setEditImageUrl(e.target.value)}
+                                    className="col-span-3"
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm font-medium">
+                                    Size
+                                </label>
+                                <div className="col-span-3">
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        step={1}
+                                        value={editingToken?.size || 1}
+                                        onChange={(e) => {
+                                            const val = parseInt(e.target.value);
+                                            if (!isNaN(val) && val >= 1) {
+                                                editingToken && setEditingToken({ ...editingToken, size: val });
+                                            }
+                                        }}
+                                    />
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Enter a natural number (e.g., 1, 2, 3).
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex justify-end">
+                            <Button onClick={handleUpdateTokenImage}>Save Changes</Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
             </div>
-        </div>
+        </TooltipProvider>
     );
 }

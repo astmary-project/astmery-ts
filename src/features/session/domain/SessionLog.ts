@@ -9,9 +9,14 @@ export type SessionLogType =
     | 'ADD_TAB' // Add a new tab
     | 'REMOVE_TAB' // Remove a tab
     | 'UPDATE_MAP_BACKGROUND' // Update map background
+    | 'UPDATE_STATIC_BACKGROUND' // Update static background (fixed wallpaper)
     | 'ADD_TOKEN' // Add a token to the map
     | 'REMOVE_TOKEN' // Remove a token from the map
-    | 'MOVE_TOKEN'; // Move a token on the map
+    | 'MOVE_TOKEN' // Move a token on the map
+    | 'UPDATE_TOKEN' // Update token properties (size, image, etc)
+    | 'ADD_PARTICIPANT' // Add a participant to the roster
+    | 'REMOVE_PARTICIPANT' // Remove a participant from the roster
+    | 'UPDATE_PARTICIPANT'; // Update a participant's state
 
 export interface MapToken {
     id: string;
@@ -22,6 +27,7 @@ export interface MapToken {
     imageUrl?: string;
     size?: number; // Size in grid units (default 1)
     name?: string; // Added for display name
+    participantId?: string; // Link to roster participant
 }
 
 export interface SessionLogEntry {
@@ -38,16 +44,42 @@ export interface SessionLogEntry {
     // For UPDATE_MAP_BACKGROUND
     mapBackground?: {
         url: string;
+        width?: number;
+        height?: number;
     } | null;
 
-    // For ADD_TOKEN / REMOVE_TOKEN / MOVE_TOKEN
+    // For UPDATE_STATIC_BACKGROUND
+    staticBackground?: {
+        url: string;
+    } | null;
+
+    // For ADD_TOKEN / REMOVE_TOKEN / MOVE_TOKEN / UPDATE_TOKEN
     token?: MapToken | null;
+
+    // For ADD_PARTICIPANT / REMOVE_PARTICIPANT / UPDATE_PARTICIPANT
+    // We need to import SessionParticipant, but circular imports might be an issue if we import from SessionRoster.
+    // So we'll define a compatible shape or use 'any' for now, or move SessionParticipant here.
+    // Actually, let's move SessionParticipant to a shared place or just define the payload shape here.
+    participant?: {
+        id: string;
+        type: 'linked' | 'extra';
+        name: string;
+        avatarUrl?: string;
+        characterId?: string;
+        state: {
+            hp: { current: number; max: number };
+            mp: { current: number; max: number };
+            initiative: number;
+            nextAction?: string;
+        };
+        isVisible: boolean;
+    } | null;
 
     // For UPDATE_RESOURCE
     resourceUpdate?: {
         resourceId: string;
         type: 'set' | 'modify' | 'reset';
-        value?: number;
+        value?: number | string; // Allow string for expressions
         resetTarget?: 'initial' | 'max';
     } | null;
 
@@ -58,6 +90,7 @@ export interface SessionLogEntry {
     chatMessage?: {
         sender: string;
         content: string;
+        avatarUrl?: string; // Added avatarUrl
     } | null;
 
     // Index signature for JSON compatibility
