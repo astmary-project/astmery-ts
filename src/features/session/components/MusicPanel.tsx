@@ -22,6 +22,12 @@ export function MusicPanel({ currentBgm, onLog }: MusicPanelProps) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [volume, setVolume] = useState(currentBgm?.volume ?? 0.5);
     const [localIsPlaying, setLocalIsPlaying] = useState(false);
+    const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
+    // Reset blobUrl when song changes
+    useEffect(() => {
+        setBlobUrl(null);
+    }, [currentBgm?.url]);
 
     // Sync with props
     useEffect(() => {
@@ -32,21 +38,56 @@ export function MusicPanel({ currentBgm, onLog }: MusicPanelProps) {
                 const playPromise = audioRef.current.play();
                 if (playPromise !== undefined) {
                     playPromise.catch(e => {
+                        // Ignore AbortError (interrupted by new load)
+                        if (e.name === 'AbortError') return;
+
                         console.error("Audio play failed", e);
+                        if (e.name === 'NotAllowedError') {
+                            // Autoplay blocked. User needs to interact.
+                            // We set local state to false so the Play button shows.
+                            setLocalIsPlaying(false);
+
+                            // Add a one-time listener to retry playback on next interaction
+                            const retryPlay = () => {
+                                if (audioRef.current && currentBgm.isPlaying) {
+                                    audioRef.current.play()
+                                        .then(() => setLocalIsPlaying(true))
+                                        .catch(() => {
+                                            // Ignore subsequent failures during retry
+                                        });
+                                }
+                                window.removeEventListener('click', retryPlay);
+                                window.removeEventListener('keydown', retryPlay);
+                            };
+                            window.addEventListener('click', retryPlay);
+                            window.addEventListener('keydown', retryPlay);
+                        } else {
+                            console.error("Audio play failed", e);
+                        }
                         // Don't alert here, as it might be autoplay policy.
                         // Just update local state to match reality if needed.
                     });
                 }
+                // Optimistically set to true, but catch block will revert if failed
                 setLocalIsPlaying(true);
             } else {
                 audioRef.current.pause();
                 setLocalIsPlaying(false);
             }
         }
-    }, [currentBgm]); // Re-run when currentBgm changes (including isPlaying, volume, url)
+    }, [currentBgm, blobUrl]); // Re-run when currentBgm OR blobUrl changes
 
     const handlePlayPause = () => {
         if (!currentBgm) return;
+
+        // If global is playing but local is paused (e.g. autoplay blocked),
+        // just resume locally without sending a log.
+        if (currentBgm.isPlaying && !localIsPlaying) {
+            audioRef.current?.play().catch(console.error);
+            setLocalIsPlaying(true);
+            return;
+        }
+
         const newIsPlaying = !currentBgm.isPlaying;
 
         onLog({
@@ -134,16 +175,87 @@ export function MusicPanel({ currentBgm, onLog }: MusicPanelProps) {
         });
     };
 
+    const runDiagnostics = async () => {
+        if (!currentBgm?.url) return;
+
+        const report = [];
+        report.push(`URL: ${currentBgm.url}`);
+
+        try {
+            report.push("--- HEAD Request ---");
+            const headRes = await fetch(currentBgm.url, { method: 'HEAD' });
+            report.push(`Status: ${headRes.status} ${headRes.statusText}`);
+            report.push(`Content-Type: ${headRes.headers.get('Content-Type')}`);
+            report.push(`CORS: ${headRes.headers.get('Access-Control-Allow-Origin') || 'None'}`);
+
+            report.push("--- GET Request (Blob) ---");
+            const blobRes = await fetch(currentBgm.url);
+            report.push(`Status: ${blobRes.status} ${blobRes.statusText}`);
+            const blob = await blobRes.blob();
+            report.push(`Blob Size: ${blob.size} bytes`);
+            report.push(`Blob Type: ${blob.type}`);
+
+            report.push("--- Playback Test ---");
+            const audio = new Audio();
+            audio.src = URL.createObjectURL(blob);
+            await new Promise((resolve, reject) => {
+                audio.onloadeddata = () => {
+                    report.push("Audio Loaded Data: Success");
+                    resolve(null);
+                };
+                audio.onerror = (e) => {
+                    report.push(`Audio Error: ${audio.error?.code} - ${audio.error?.message}`);
+                    reject(audio.error);
+                };
+                // Timeout
+                setTimeout(() => reject(new Error("Timeout")), 5000);
+            });
+
+            alert("Diagnostics Passed!\n" + report.join('\n'));
+
+        } catch (e: any) {
+            report.push(`ERROR: ${e.message}`);
+            alert("Diagnostics Failed:\n" + report.join('\n'));
+        }
+    };
+
+    const getAudioSrc = (url: string) => {
+        const audioUrl = new URL(url);
+        audioUrl.searchParams.set('t', Date.now().toString());
+        return audioUrl.toString();
+    };
+
     return (
         <div className="flex items-center gap-2 bg-background/80 backdrop-blur rounded-full px-3 py-1.5 border shadow-sm">
             <audio
+                key={currentBgm?.url} // Force re-mount when URL changes
                 ref={audioRef}
-                src={currentBgm?.url}
+
+
+
+                src={blobUrl || (currentBgm ? getAudioSrc(currentBgm.url) : undefined)}
                 loop={currentBgm?.isLoop ?? true}
-                crossOrigin="anonymous"
                 onError={(e) => {
-                    // Keep simple error logging for now
-                    console.error("Audio playback error", e.currentTarget.error);
+                    const error = e.currentTarget.error;
+
+                    // If Source Not Supported (Code 4) and we haven't tried blob yet, suppress error and try fallback
+                    if (error?.code === 4 && currentBgm?.url && !blobUrl) {
+                        console.warn("Initial playback failed (Code 4). Attempting Blob fallback...");
+                        fetch(currentBgm.url)
+                            .then(res => {
+                                if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+                                return res.blob();
+                            })
+                            .then(blob => {
+                                const newBlobUrl = URL.createObjectURL(blob);
+                                console.log("Blob fallback successful:", newBlobUrl);
+                                setBlobUrl(newBlobUrl); // This will trigger re-render and useEffect
+                            })
+                            .catch(fetchErr => {
+                                console.error("Blob fallback failed:", fetchErr);
+                                // Don't alert here to avoid spam, user can run diagnostics
+                            });
+                    }
                 }}
             />
 

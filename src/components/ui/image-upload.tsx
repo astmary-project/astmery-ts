@@ -1,7 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { Loader2, Upload, X } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -43,23 +42,19 @@ export const ImageUpload = ({
         setIsUploading(true);
 
         try {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-            const filePath = `${fileName}`;
+            // Use R2AssetRepository to handle upload and DB registration
+            // We can't easily inject repository here without refactoring props, so we'll instantiate it directly for now.
+            // Or better, we can just import it.
+            const { R2AssetRepository } = await import('@/features/assets/infrastructure/R2AssetRepository');
+            const repository = new R2AssetRepository();
 
-            const { error: uploadError } = await supabase.storage
-                .from(bucketName)
-                .upload(filePath, file);
+            const result = await repository.upload(file, 'image');
 
-            if (uploadError) {
-                throw uploadError;
+            if (result.isFailure) {
+                throw result.error;
             }
 
-            const { data } = supabase.storage
-                .from(bucketName)
-                .getPublicUrl(filePath);
-
-            onChange(data.publicUrl);
+            onChange(result.value.url);
         } catch (err) {
             console.error('Upload error:', err);
             setError('画像のアップロードに失敗しました。');
