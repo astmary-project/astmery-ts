@@ -1,3 +1,4 @@
+import { CharacterCalculator } from '../../character/domain/CharacterCalculator';
 import { CharacterState } from '../../character/domain/CharacterLog';
 import { SessionLogEntry } from './SessionLog';
 
@@ -38,10 +39,19 @@ export class SessionCalculator {
                 const current = nextValues[resDef.id] ?? resDef.initial;
                 let newValue = current;
 
+                // Helper to resolve value
+                const resolveValue = (val: number | string | undefined, currentVal: number): number => {
+                    if (val === undefined) return currentVal;
+                    if (typeof val === 'number') return val;
+                    return CharacterCalculator.evaluateFormula(val, state);
+                };
+
+                const resolvedVal = resolveValue(value, current);
+
                 if (type === 'set' && value !== undefined) {
-                    newValue = value;
+                    newValue = resolvedVal;
                 } else if (type === 'modify' && value !== undefined) {
-                    newValue = current + value;
+                    newValue = current + resolvedVal;
                 } else if (type === 'reset') {
                     newValue = resDef.initial;
                 }

@@ -72,6 +72,25 @@ export class SupabaseRoomRepository implements IRoomRepository {
         }
     }
 
+    async delete(id: string): Promise<Result<void, AppError>> {
+        try {
+            const supabase = await createClient();
+            const { error } = await supabase
+                .from('rooms')
+                .delete()
+                .eq('id', id);
+
+            if (error) {
+                console.error('Failed to delete room:', error);
+                return err(AppError.internal('Failed to delete room', error));
+            }
+
+            return ok(undefined);
+        } catch (e) {
+            return err(AppError.internal('Unexpected error deleting room', e));
+        }
+    }
+
     async findById(id: string): Promise<Result<Room, AppError>> {
         try {
             const supabase = await createClient();

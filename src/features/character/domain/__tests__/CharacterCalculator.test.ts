@@ -292,6 +292,28 @@ describe('CharacterCalculator', () => {
         expect(state.stats['Body']).toBe(5);
         expect(state.stats['Spirit']).toBe(4);
     });
+
+    it('should evaluate formula with Japanese custom resource', () => {
+        const logs: CharacterLogEntry[] = [];
+        const state = CharacterCalculator.calculateState(logs);
+        // Manually inject custom stat as if it came from session context or custom resource
+        state.stats['リアクターゲージ'] = 5;
+
+        const result = CharacterCalculator.evaluateFormula('2-{リアクターゲージ}', state);
+        expect(result).toBe(-3);
+    });
+
+    it('should evaluate formula with Japanese custom resource mixed with standard stats', () => {
+        const logs: CharacterLogEntry[] = [
+            { id: '1', type: 'GROW_STAT', timestamp: 1, statGrowth: { key: 'Body', value: 10, cost: 0 } },
+        ];
+        const state = CharacterCalculator.calculateState(logs);
+        state.stats['リアクターゲージ'] = 3;
+
+        // {肉体} -> Body (10), {リアクターゲージ} -> 3
+        const result = CharacterCalculator.evaluateFormula('{肉体} + {リアクターゲージ}', state);
+        expect(result).toBe(13);
+    });
 });
 
 describe('CharacterCalculator Cost Logic', () => {

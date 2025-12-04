@@ -16,6 +16,15 @@ export const STAT_LABELS: Record<string, string> = {
     'KnowledgeCheck': '知識判定',
     'GatheringCount': '採集回数',
     'SpellCheck': '魔術行使判定',
+    'HitCheck': '命中判定',
+    'AvoidanceCheck': '回避判定',
+    'SpiritResistanceCheck': '精神抵抗判定',
+    'SpellResistanceCheck': '魔術抵抗判定',
+    'CreatureKnowledgeCheck': '生体知識判定',
+    'ScienceKnowledgeCheck': '科学知識判定',
+    'InitiativeCheck': '先制判定',
+    'MagicCheck': '魔法行使判定',
+    'TeamCheck': 'テイム判定',
     'DamageDice': 'ダメージダイス',
 };
 
@@ -54,5 +63,6 @@ export const STANDARD_CHECK_FORMULAS: Record<string, string> = {
     '科学知識判定': '2d6 + {Science} + {ScienceKnowledgeCheck}', // 科学 + 科学知識判定(補正)
     '先制判定': '2d6 + {Combat} + {InitiativeCheck}', // 戦闘 + 先制判定(補正)
     '魔法行使判定': '2d6 + {Grade} + {Spirit} + {MagicCheck}', // グレード + 精神 + 魔法行使判定(補正)
+    'テイム判定': '2d6 + {Spirit} + {TeamCheck}', // 精神 + テイム判定(補正)
 
 };

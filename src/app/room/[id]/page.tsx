@@ -1,5 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { getRoom } from '@/features/session/actions/room';
+import { RoomEntryOverlay } from '@/features/session/components/RoomEntryOverlay';
+import { RoomHeaderMusic } from '@/features/session/components/RoomHeaderMusic';
 import { RoomPresenceIndicator } from '@/features/session/components/RoomPresenceIndicator';
 import { RoomSettingsDialog } from '@/features/session/components/RoomSettingsDialog';
 import { SessionRoomMain } from '@/features/session/components/SessionRoomMain';
@@ -24,8 +26,8 @@ export default async function SessionRoomPage({ params }: Props) {
 
     return (
         <SessionRoomProvider roomId={id}>
-            <div className="container mx-auto pt-4 px-4 h-[calc(100vh-4rem)] flex flex-col overflow-hidden">
-                <header className="flex items-center justify-between border-b pb-4 mb-4">
+            <div className="w-full h-[calc(100vh-4rem)] flex flex-col overflow-hidden">
+                <header className="flex items-center justify-between border-b px-6 py-3 bg-background/80 backdrop-blur-sm z-50 shrink-0">
                     <div className="flex items-center gap-4">
                         <Link href="/room">
                             <Button variant="ghost" size="icon">
@@ -35,12 +37,15 @@ export default async function SessionRoomPage({ params }: Props) {
                         <h1 className="text-xl font-bold">{room.name}</h1>
                     </div>
                     <div className="flex items-center gap-2">
+                        <RoomHeaderMusic roomId={id} />
                         <RoomPresenceIndicator />
                         <RoomSettingsDialog room={room} />
                     </div>
                 </header>
 
-                <div className="flex-1 min-h-0">
+                <RoomEntryOverlay />
+
+                <div className="flex-1 min-h-0 relative">
                     <SessionRoomMain roomId={id} />
                 </div>
             </div>
