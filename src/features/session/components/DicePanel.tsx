@@ -17,6 +17,7 @@ import { useCharacterData } from '../../character/hooks/useCharacterData';
 import { CommandParser } from '../domain/CommandParser';
 import { MapToken, SessionLogEntry } from '../domain/SessionLog';
 import { SessionParticipant } from '../domain/SessionRoster';
+import { DiceInputParser } from '../logic/DiceInputParser';
 import { AutocompleteList } from './AutocompleteList';
 import { ChatPalette } from './ChatPalette';
 
@@ -503,27 +504,60 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
             return;
         }
 
-        // Try Dice Roll
-        const rollResult = DiceRoller.roll(input, { stats: activeState.stats, derivedStats: activeState.derivedStats }, JAPANESE_TO_ENGLISH_STATS);
+        // Try parsing as a dice command with optional description
+        const parsedDice = DiceInputParser.parse(input);
 
-        if (rollResult.isSuccess) {
-            onLog({
-                id: crypto.randomUUID(),
-                type: 'ROLL',
-                // eslint-disable-next-line react-hooks/purity
-                timestamp: Date.now(),
-                diceRoll: rollResult.value,
-                channel: 'main',
-                characterId: selectedTokenId !== 'self' ? selectedTokenId : undefined,
-                chatMessage: { // Include sender info for display
-                    sender: senderName,
-                    content: '',
-                    avatarUrl: selectedParticipant?.avatarUrl // Include avatarUrl
-                }
-            });
-            setInput('');
-            return;
+        if (parsedDice) {
+            const rollResult = DiceRoller.roll(parsedDice.formula, { stats: activeState.stats, derivedStats: activeState.derivedStats }, JAPANESE_TO_ENGLISH_STATS);
+
+            if (rollResult.isSuccess) {
+                // Append description to details or use a separate field?
+                // SessionLogEntry has 'description' field, but for ROLL type, it usually uses 'diceRoll.details'.
+                // However, the 'description' field on SessionLogEntry is generic.
+                // Let's use the top-level description field for the user's custom description,
+                // and keep diceRoll.details for the formula expansion.
+
+                // Wait, renderLog for ROLL uses:
+                // result.details (formula expansion)
+                // It doesn't seem to use log.description?
+                // Let's check renderLog again.
+
+                // renderLog for ROLL:
+                // <div className="font-mono text-xs text-muted-foreground mb-1">{result.formula}</div>
+                // <span className="text-sm">{result.details}</span>
+
+                // It does NOT use log.description.
+                // I should update renderLog to show log.description if present.
+
+                onLog({
+                    id: crypto.randomUUID(),
+                    type: 'ROLL',
+                    // eslint-disable-next-line react-hooks/purity
+                    timestamp: Date.now(),
+                    diceRoll: rollResult.value,
+                    channel: 'main',
+                    characterId: selectedTokenId !== 'self' ? selectedTokenId : undefined,
+                    description: parsedDice.description, // Store description here
+                    chatMessage: { // Include sender info for display
+                        sender: senderName,
+                        content: '',
+                        avatarUrl: selectedParticipant?.avatarUrl // Include avatarUrl
+                    }
+                });
+                setInput('');
+                return;
+            }
         }
+
+        // Fallback: Try direct roll if parser failed but it might be a simple formula?
+        // DiceInputParser should cover simple formulas too.
+        // If DiceInputParser returns null, it means it's not a formula.
+        // If it returns a formula but DiceRoller fails (e.g. runtime error), we might want to treat as chat?
+        // But DiceInputParser uses DiceRoller to check validity, so it should be valid.
+        // The only case is if context causes error (e.g. divide by zero?), but we used dummy context for check.
+
+        // So if parsedDice is null, we treat as chat.
+
 
         // If not a command and not a valid roll, treat as Chat
         onLog({
@@ -733,7 +767,10 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
                                                 result.isFumble ? "bg-red-500/10 border-red-500/50" :
                                                     "bg-card border-border"
                                         )}>
-                                            <div className="font-mono text-xs text-muted-foreground mb-1">{result.formula}</div>
+                                            <div className="font-mono text-xs text-muted-foreground mb-1">
+                                                {result.formula}
+                                                {log.description && <span className="ml-2 text-foreground font-sans">{log.description}</span>}
+                                            </div>
                                             <div className="flex justify-between items-baseline">
                                                 <span className="text-sm">{result.details}</span>
                                                 <div className="flex items-center gap-2">
