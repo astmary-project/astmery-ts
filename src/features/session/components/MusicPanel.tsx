@@ -26,7 +26,10 @@ export function MusicPanel({ currentBgm, onLog }: MusicPanelProps) {
 
     // Reset blobUrl when song changes
     useEffect(() => {
-        setBlobUrl(null);
+        const timer = setTimeout(() => {
+            setBlobUrl(null);
+        }, 0);
+        return () => clearTimeout(timer);
     }, [currentBgm?.url]);
 
     // Sync with props
@@ -69,10 +72,12 @@ export function MusicPanel({ currentBgm, onLog }: MusicPanelProps) {
                     });
                 }
                 // Optimistically set to true, but catch block will revert if failed
-                setLocalIsPlaying(true);
+                const timer = setTimeout(() => setLocalIsPlaying(true), 0);
+                return () => clearTimeout(timer);
             } else {
                 audioRef.current.pause();
-                setLocalIsPlaying(false);
+                const timer = setTimeout(() => setLocalIsPlaying(false), 0);
+                return () => clearTimeout(timer);
             }
         }
     }, [currentBgm, blobUrl]); // Re-run when currentBgm OR blobUrl changes
@@ -175,55 +180,9 @@ export function MusicPanel({ currentBgm, onLog }: MusicPanelProps) {
         });
     };
 
-    const runDiagnostics = async () => {
-        if (!currentBgm?.url) return;
 
-        const report = [];
-        report.push(`URL: ${currentBgm.url}`);
 
-        try {
-            report.push("--- HEAD Request ---");
-            const headRes = await fetch(currentBgm.url, { method: 'HEAD' });
-            report.push(`Status: ${headRes.status} ${headRes.statusText}`);
-            report.push(`Content-Type: ${headRes.headers.get('Content-Type')}`);
-            report.push(`CORS: ${headRes.headers.get('Access-Control-Allow-Origin') || 'None'}`);
 
-            report.push("--- GET Request (Blob) ---");
-            const blobRes = await fetch(currentBgm.url);
-            report.push(`Status: ${blobRes.status} ${blobRes.statusText}`);
-            const blob = await blobRes.blob();
-            report.push(`Blob Size: ${blob.size} bytes`);
-            report.push(`Blob Type: ${blob.type}`);
-
-            report.push("--- Playback Test ---");
-            const audio = new Audio();
-            audio.src = URL.createObjectURL(blob);
-            await new Promise((resolve, reject) => {
-                audio.onloadeddata = () => {
-                    report.push("Audio Loaded Data: Success");
-                    resolve(null);
-                };
-                audio.onerror = (e) => {
-                    report.push(`Audio Error: ${audio.error?.code} - ${audio.error?.message}`);
-                    reject(audio.error);
-                };
-                // Timeout
-                setTimeout(() => reject(new Error("Timeout")), 5000);
-            });
-
-            alert("Diagnostics Passed!\n" + report.join('\n'));
-
-        } catch (e: any) {
-            report.push(`ERROR: ${e.message}`);
-            alert("Diagnostics Failed:\n" + report.join('\n'));
-        }
-    };
-
-    const getAudioSrc = (url: string) => {
-        const audioUrl = new URL(url);
-        audioUrl.searchParams.set('t', Date.now().toString());
-        return audioUrl.toString();
-    };
 
     return (
         <div className="flex items-center gap-2 bg-background/80 backdrop-blur rounded-full px-3 py-1.5 border shadow-sm">
@@ -233,7 +192,7 @@ export function MusicPanel({ currentBgm, onLog }: MusicPanelProps) {
 
 
 
-                src={blobUrl || (currentBgm ? getAudioSrc(currentBgm.url) : undefined)}
+                src={blobUrl || currentBgm?.url}
                 loop={currentBgm?.isLoop ?? true}
                 onError={(e) => {
                     const error = e.currentTarget.error;

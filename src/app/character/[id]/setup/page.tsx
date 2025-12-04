@@ -10,12 +10,32 @@ import { EquipmentListEditor } from '@/features/character/components/setup/Equip
 import { SkillListEditor } from '@/features/character/components/setup/SkillListEditor';
 import { SpecialtyElementEditor } from '@/features/character/components/setup/SpecialtyElementEditor';
 import { Item, Skill } from '@/features/character/domain/CharacterLog';
-import { ABILITY_STATS, STAT_LABELS } from '@/features/character/domain/constants';
+import { ABILITY_STATS, JAPANESE_TO_ENGLISH_STATS, STAT_LABELS } from '@/features/character/domain/constants';
 import { CharacterSetupService, ItemInput, SkillInput, SpecialtyElementInput } from '@/features/character/domain/service/CharacterSetupService';
 import { useCharacterSheet } from '@/features/character/hooks/useCharacterSheet';
 import { ChevronDown } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+
+// Helper to calculate base stats (Total - Buffs)
+const calculateBaseStats = (stats: Record<string, number>, equipment: Item[], skills: Skill[]) => {
+    const baseStats = { ...stats };
+
+    const subtractMods = (mods?: Record<string, number>) => {
+        if (!mods) return;
+        Object.entries(mods).forEach(([key, value]) => {
+            const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+            if (typeof baseStats[normalizedKey] === 'number') {
+                baseStats[normalizedKey] -= value;
+            }
+        });
+    };
+
+    equipment.forEach(item => subtractMods(item.statModifiers));
+    skills.forEach(skill => subtractMods(skill.statModifiers));
+
+    return baseStats;
+};
 
 export default function CharacterSetupPage() {
     const params = useParams();
@@ -38,16 +58,19 @@ export default function CharacterSetupPage() {
     const initialSkillsRef = useRef<Skill[]>([]);
     const initialEquipmentRef = useRef<Item[]>([]);
 
+
+
     // Load initial data
     useEffect(() => {
         if (!isLoading && !isInitialized) {
             // Defer update to avoid set-state-in-effect
             const timer = setTimeout(() => {
+                const baseStats = calculateBaseStats(state.stats, state.equipment, state.skills);
                 setFormData({
                     name: name,
                     bio: character?.bio || '',
                     avatarUrl: character?.avatarUrl || '',
-                    stats: { ...state.stats },
+                    stats: baseStats,
                 });
 
                 // Parse existing specialty elements
@@ -117,8 +140,10 @@ export default function CharacterSetupPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        const currentBaseStats = calculateBaseStats(state.stats, state.equipment, state.skills);
+
         const logsToAdd = CharacterSetupService.calculateDiffLogs({
-            currentStats: state.stats,
+            currentStats: currentBaseStats,
             currentSkills: initialSkillsRef.current,
             currentEquipment: initialEquipmentRef.current,
             currentCustomLabels: state.customLabels,
