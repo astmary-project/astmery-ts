@@ -81,9 +81,10 @@ export class R2AssetRepository implements IAssetRepository {
                 createdAt: new Date(insertedData.created_at).getTime(),
             });
 
-        } catch (e: any) {
+        } catch (e) {
             console.error('Unexpected error uploading asset:', e);
-            return err(AppError.internal(`Unexpected error uploading asset: ${e.message || e}`, e));
+            const message = e instanceof Error ? e.message : String(e);
+            return err(AppError.internal(`Unexpected error uploading asset: ${message}`, e));
         }
     }
 
@@ -145,7 +146,7 @@ export class R2AssetRepository implements IAssetRepository {
             // Simple extraction: remove domain part
             // Assuming publicDomain is the prefix
             const baseUrl = this.publicDomain.replace(/\/$/, '');
-            let key = asset.url.replace(baseUrl + '/', '');
+            const key = asset.url.replace(baseUrl + '/', '');
 
             // If URL doesn't start with domain (e.g. old Supabase URL), handle gracefully?
             // For migration, we might have mixed URLs.

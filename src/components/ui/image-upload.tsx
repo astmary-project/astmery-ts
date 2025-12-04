@@ -8,14 +8,14 @@ import { useRef, useState } from 'react';
 interface ImageUploadProps {
     value?: string;
     onChange: (url: string) => void;
-    bucketName?: string;
+
     className?: string;
 }
 
 export const ImageUpload = ({
     value,
     onChange,
-    bucketName = 'character-images',
+
     className,
 }: ImageUploadProps) => {
     const [isUploading, setIsUploading] = useState(false);

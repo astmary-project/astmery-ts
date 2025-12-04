@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Loader2, Music, Trash2, Upload } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Asset, AssetType } from '../domain/Asset';
 import { R2AssetRepository } from '../infrastructure/R2AssetRepository';
 
@@ -23,7 +23,7 @@ export function AssetManager({ onSelect, className, initialTab = 'image' }: Asse
     const [isUploading, setIsUploading] = useState(false);
     const [repository] = useState(() => new R2AssetRepository());
 
-    const loadAssets = async (type: AssetType) => {
+    const loadAssets = useCallback(async (type: AssetType) => {
         setIsLoading(true);
         const result = await repository.list(type);
         if (result.isSuccess) {
@@ -32,11 +32,14 @@ export function AssetManager({ onSelect, className, initialTab = 'image' }: Asse
             console.error('Failed to load assets:', result.error);
         }
         setIsLoading(false);
-    };
+    }, [repository]);
 
     useEffect(() => {
-        loadAssets(activeTab);
-    }, [activeTab]);
+        const timer = setTimeout(() => {
+            void loadAssets(activeTab);
+        }, 0);
+        return () => clearTimeout(timer);
+    }, [activeTab, loadAssets]);
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -146,6 +149,7 @@ export function AssetManager({ onSelect, className, initialTab = 'image' }: Asse
                                         >
                                             {activeTab === 'image' ? (
                                                 <div className="aspect-square relative bg-muted">
+                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
                                                     <img
                                                         src={asset.url}
                                                         alt={asset.name}
