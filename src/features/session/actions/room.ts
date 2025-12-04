@@ -34,12 +34,33 @@ export async function listRooms(): Promise<Result<Room[], AppError>> {
     return repository.listAll();
 }
 
+import { redirect } from 'next/navigation';
+
 export async function updateRoom(id: string, data: Partial<Room>): Promise<ActionResponse<void>> {
     const result = await repository.update(id, data);
     if (result.isSuccess) {
         revalidatePath('/room');
         revalidatePath(`/room/${id}`);
         return { success: true, data: undefined };
+    }
+    return { success: false, error: result.error.message };
+}
+
+export async function archiveRoom(id: string) {
+    const result = await repository.update(id, { status: 'closed' });
+    if (result.isSuccess) {
+        revalidatePath('/room');
+        revalidatePath(`/room/${id}`);
+        redirect('/room');
+    }
+    return { success: false, error: result.error.message };
+}
+
+export async function deleteRoom(id: string) {
+    const result = await repository.delete(id);
+    if (result.isSuccess) {
+        revalidatePath('/room');
+        redirect('/room');
     }
     return { success: false, error: result.error.message };
 }

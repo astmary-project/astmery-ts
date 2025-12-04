@@ -91,13 +91,6 @@ export class CharacterCalculator {
                     state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + value;
                 }
             }
-            if (item.dynamicModifiers) {
-                for (const [key, formula] of Object.entries(item.dynamicModifiers)) {
-                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-                    const bonus = this.evaluateFormula(formula, state);
-                    state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + bonus;
-                }
-            }
             // Granted Stats/Resources
             if (item.grantedStats) {
                 for (const stat of item.grantedStats) {
@@ -128,13 +121,6 @@ export class CharacterCalculator {
                     state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + value;
                 }
             }
-            if (skill.dynamicModifiers) {
-                for (const [key, formula] of Object.entries(skill.dynamicModifiers)) {
-                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-                    const bonus = this.evaluateFormula(formula, state);
-                    state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + bonus;
-                }
-            }
             // Granted Stats/Resources
             if (skill.grantedStats) {
                 for (const stat of skill.grantedStats) {
@@ -154,6 +140,12 @@ export class CharacterCalculator {
                     }
                 }
             }
+        }
+
+        // Apply Dynamic Modifiers (Calculated last so they can use static mods)
+        const dynamicBonuses = this.calculateDynamicBonuses(state);
+        for (const [key, bonus] of Object.entries(dynamicBonuses)) {
+            state.stats[key] = (state.stats[key] || 0) + bonus;
         }
 
         // Calculate Derived Stats
@@ -474,6 +466,38 @@ export class CharacterCalculator {
             success: cost,
             failure: 1
         };
+    }
+
+    /**
+     * Calculates dynamic bonuses from equipment and skills.
+     * Useful for recalculating bonuses when state changes (e.g. resource updates).
+     */
+    public static calculateDynamicBonuses(state: CharacterState): Record<string, number> {
+        const bonuses: Record<string, number> = {};
+
+        // Equipment
+        for (const item of state.equipment) {
+            if (item.dynamicModifiers) {
+                for (const [key, formula] of Object.entries(item.dynamicModifiers)) {
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                    const bonus = this.evaluateFormula(formula, state);
+                    bonuses[normalizedKey] = (bonuses[normalizedKey] || 0) + bonus;
+                }
+            }
+        }
+
+        // Skills
+        for (const skill of state.skills) {
+            if (skill.dynamicModifiers) {
+                for (const [key, formula] of Object.entries(skill.dynamicModifiers)) {
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                    const bonus = this.evaluateFormula(formula, state);
+                    bonuses[normalizedKey] = (bonuses[normalizedKey] || 0) + bonus;
+                }
+            }
+        }
+
+        return bonuses;
     }
 }
 

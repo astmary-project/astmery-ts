@@ -3,7 +3,7 @@ export type { CharacterLogEntry, CharacterState, Item, Resource, Skill } from '.
 
 // Domain Logic
 export { CharacterCalculator } from './domain/CharacterCalculator';
-export { JAPANESE_TO_ENGLISH_STATS } from './domain/constants';
+export { JAPANESE_TO_ENGLISH_STATS, STAT_LABELS } from './domain/constants';
 
 // Components
 export { CharacterHeader } from './components/CharacterHeader';
