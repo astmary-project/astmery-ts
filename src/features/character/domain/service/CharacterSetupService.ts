@@ -205,7 +205,6 @@ export class CharacterSetupService {
                                 if ('id' in clone) clone.id = '';
                                 if ('min' in clone && clone.min === undefined) clone.min = 0;
                                 // Sort keys
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 return Object.keys(clone).sort().reduce((acc, key) => {
                                     acc[key] = clone[key];
                                     return acc;
@@ -217,7 +216,6 @@ export class CharacterSetupService {
                     if (typeof obj === 'object') {
                         if (Object.keys(obj).length === 0) return '';
                         // Sort keys
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         return JSON.stringify(Object.keys(obj).sort().reduce((acc, key) => {
                             acc[key] = obj[key];
                             return acc;
@@ -345,7 +343,6 @@ export class CharacterSetupService {
                                 const clone = { ...item } as any;
                                 if ('id' in clone) clone.id = '';
                                 if ('min' in clone && clone.min === undefined) clone.min = 0;
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 return Object.keys(clone).sort().reduce((acc, key) => {
                                     acc[key] = clone[key];
                                     return acc;
@@ -356,7 +353,6 @@ export class CharacterSetupService {
                     }
                     if (typeof obj === 'object') {
                         if (Object.keys(obj).length === 0) return '';
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         return JSON.stringify(Object.keys(obj).sort().reduce((acc, key) => {
                             acc[key] = obj[key];
                             return acc;

@@ -240,7 +240,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         handleLog({
             id: crypto.randomUUID(),
             type: 'ADD_PARTICIPANT',
-            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
             participant: newParticipant,
             description: `Added character: ${character.name}`
@@ -264,7 +263,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         handleLog({
             id: crypto.randomUUID(),
             type: 'ADD_PARTICIPANT',
-            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
             participant: newParticipant,
             description: `Added extra: ${name}`
@@ -279,7 +277,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
             handleLog({
                 id: crypto.randomUUID(),
                 type: 'REMOVE_PARTICIPANT',
-                // eslint-disable-next-line react-hooks/purity
                 timestamp: Date.now(),
                 participant: { ...participant }, // Pass full object or just ID if type allows, but log expects object
                 description: `Removed ${participant.name}`
@@ -291,7 +288,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         handleLog({
             id: crypto.randomUUID(),
             type: 'UPDATE_PARTICIPANT',
-            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
             participant: participant,
             description: `Updated ${participant.name}`
@@ -306,7 +302,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
                 handleLog({
                     id: crypto.randomUUID(),
                     type: 'UPDATE_PARTICIPANT',
-                    // eslint-disable-next-line react-hooks/purity
                     timestamp: Date.now(),
                     participant: {
                         ...p,
@@ -352,7 +347,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
             handleLog({
                 id: crypto.randomUUID(),
                 type: 'UPDATE_PARTICIPANT',
-                // eslint-disable-next-line react-hooks/purity
                 timestamp: Date.now(),
                 participant: {
                     ...p,

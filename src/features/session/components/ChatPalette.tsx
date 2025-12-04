@@ -81,7 +81,7 @@ export function ChatPalette({ state, onSelect }: ChatPaletteProps) {
 
                                         // 2. Active Check Fallback
                                         if (skill.activeCheck) {
-                                            const formula = `2d6 + ${skill.activeCheck}`; // Assuming activeCheck is a modifier or stat
+                                            // Assuming activeCheck is a modifier or stat
                                             // Actually activeCheck might be "Combat" or "Combat + 1"
                                             // If it's just a stat name, we want "2d6 + {Stat}"
                                             // But usually activeCheck in this system is just the text description or modifier?

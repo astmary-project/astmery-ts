@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Settings } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { archiveRoom, deleteRoom, updateRoom } from '../actions/room';
 import { Room } from '../domain/Room';
@@ -18,7 +17,6 @@ export function RoomSettingsDialog({ room }: RoomSettingsDialogProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [name, setName] = useState(room.name);
     const [isSaving, setIsSaving] = useState(false);
-    const router = useRouter();
 
     const handleSave = async () => {
         if (!name.trim()) return;

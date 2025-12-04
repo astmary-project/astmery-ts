@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { useSelf } from '@/liveblocks.config';
 import { Edit, Grid, Image as ImageIcon, Map as MapIcon, Monitor, Plus, Trash2 } from 'lucide-react';
+/* eslint-disable @next/next/no-img-element */
 import React, { useRef, useState } from 'react';
 import { MapToken, ScreenPanel, SessionLogEntry } from '../domain/SessionLog';
 
@@ -223,7 +224,6 @@ export function MapPanel({ backgroundImageUrl, backgroundWidth = 2000, backgroun
         onLog({
             id: crypto.randomUUID(),
             type: 'UPDATE_MAP_BACKGROUND',
-            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
             mapBackground: {
                 url: newBgUrl,
@@ -240,7 +240,6 @@ export function MapPanel({ backgroundImageUrl, backgroundWidth = 2000, backgroun
         onLog({
             id: crypto.randomUUID(),
             type: 'UPDATE_STATIC_BACKGROUND',
-            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
             staticBackground: { url: newStaticBgUrl },
             description: 'Updated static background'
@@ -362,7 +361,6 @@ export function MapPanel({ backgroundImageUrl, backgroundWidth = 2000, backgroun
         onLog({
             id: crypto.randomUUID(),
             type: 'UPDATE_TOKEN',
-            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
             token: {
                 ...editingToken,
@@ -536,7 +534,6 @@ export function MapPanel({ backgroundImageUrl, backgroundWidth = 2000, backgroun
                                             onLog({
                                                 id: crypto.randomUUID(),
                                                 type: 'REMOVE_SCREEN_PANEL',
-                                                // eslint-disable-next-line react-hooks/purity
                                                 timestamp: Date.now(),
                                                 screenPanel: panel,
                                                 description: 'Removed screen panel'
@@ -607,7 +604,6 @@ export function MapPanel({ backgroundImageUrl, backgroundWidth = 2000, backgroun
                                                 roomId: 'demo',
                                                 type: 'REMOVE_TOKEN',
                                                 token: token,
-                                                // eslint-disable-next-line react-hooks/purity
                                                 timestamp: Date.now(),
                                                 description: `Removed token: ${token.name}`
                                             });
@@ -793,7 +789,7 @@ export function MapPanel({ backgroundImageUrl, backgroundWidth = 2000, backgroun
                                         <Label>Visibility Mode</Label>
                                         <Select
                                             value={editingPanel.visibility}
-                                            onValueChange={(val: any) => setEditingPanel({ ...editingPanel, visibility: val })}
+                                            onValueChange={(val: string) => setEditingPanel({ ...editingPanel, visibility: val as "none" | "all" | "owner" | "others" })}
                                         >
                                             <SelectTrigger>
                                                 <SelectValue />
@@ -868,7 +864,9 @@ export function MapPanel({ backgroundImageUrl, backgroundWidth = 2000, backgroun
                                         onChange={(e) => {
                                             const val = parseInt(e.target.value);
                                             if (!isNaN(val) && val >= 1) {
-                                                editingToken && setEditingToken({ ...editingToken, size: val });
+                                                if (editingToken) {
+                                                    setEditingToken({ ...editingToken, size: val });
+                                                }
                                             }
                                         }}
                                     />

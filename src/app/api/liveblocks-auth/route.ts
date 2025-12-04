@@ -6,13 +6,13 @@ const liveblocks = new Liveblocks({
     secret: process.env.LIVEBLOCKS_SECRET_KEY!,
 });
 
-export async function POST(_request: Request) {
+export async function POST() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     // Get the current user from your database
     let userName = "Anonymous";
-    let userAvatar = `https://liveblocks.io/avatars/avatar-${Math.floor(Math.random() * 30)}.png`;
+    const userAvatar = `https://liveblocks.io/avatars/avatar-${Math.floor(Math.random() * 30)}.png`;
 
     if (user) {
         // Try to fetch profile

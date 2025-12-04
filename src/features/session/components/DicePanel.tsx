@@ -118,9 +118,7 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
     // Default tabs if not provided
     // Default tabs if not provided
     // Reorder: Main -> User Tabs -> System
-    const displayTabs = tabs.length > 0
-        ? [...tabs, { id: 'system', label: 'System' }] // User tabs + System
-        : [{ id: 'main', label: 'Main' }, { id: 'system', label: 'System' }];
+
 
     // Ensure Main is always first if we are merging, but here 'tabs' prop might contain user tabs.
     // Actually, the previous logic was: const displayTabs = tabs.length > 0 ? tabs : [{ id: 'main', label: 'Main' }, { id: 'system', label: 'System' }];
@@ -155,8 +153,8 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
         const lastOpenBrace = newValue.lastIndexOf('{', cursor - 1);
         const lastColon = newValue.lastIndexOf(':', cursor - 1);
         const lastCloseBrace = newValue.lastIndexOf('}', cursor - 1);
-        const lastSpace = newValue.lastIndexOf(' ', cursor - 1); // Basic boundary check
-        const lastSemicolon = newValue.lastIndexOf(';', cursor - 1);
+        // const lastSpace = newValue.lastIndexOf(' ', cursor - 1); // Basic boundary check
+        // const lastSemicolon = newValue.lastIndexOf(';', cursor - 1);
 
         // Check for Variable Autocomplete '{'
         // Trigger if '{' is found, and it's after any closing brace (to avoid being inside another tag if we assume flat structure, though nested isn't supported yet)
@@ -216,7 +214,7 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
                 suggestions.push({ label: key, value: key, description: activeState.stats[key]?.toString() ?? activeState.derivedStats[key]?.toString() });
 
                 // Find Japanese label for this key
-                const jpLabel = Object.entries(JAPANESE_TO_ENGLISH_STATS).find(([_, en]) => en === key)?.[0];
+                const jpLabel = Object.entries(JAPANESE_TO_ENGLISH_STATS).find(([, en]) => en === key)?.[0];
                 if (jpLabel) {
                     suggestions.push({ label: jpLabel, value: jpLabel, description: `${key}: ${activeState.stats[key] ?? activeState.derivedStats[key]}` });
                 }
@@ -415,7 +413,7 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
                     let updated = false;
 
                     // Helper to resolve value
-                    const resolveValue = (val: number | string, current: number): number => {
+                    const resolveValue = (val: number | string): number => {
                         if (typeof val === 'number') return val;
                         // Simple expression handling if needed, but CommandParser already handles simple numbers
                         // If it's a string expression like "10+2", we might need eval or similar, but for now assume simple number string
@@ -428,7 +426,7 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
                         // Actually, roster state has max.
                         if (type === 'reset') return max;
 
-                        const numVal = resolveValue(value ?? 0, current);
+                        const numVal = resolveValue(value ?? 0);
                         if (type === 'set') return numVal;
                         if (type === 'modify') return current + numVal;
                         return current;
@@ -442,8 +440,8 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
                         updated = true;
                     } else if (targetRes === 'init' || targetRes === 'initiative') {
                         // Initiative update
-                        if (type === 'set') newState.initiative = resolveValue(value ?? 0, newState.initiative);
-                        if (type === 'modify') newState.initiative += resolveValue(value ?? 0, newState.initiative);
+                        if (type === 'set') newState.initiative = resolveValue(value ?? 0);
+                        if (type === 'modify') newState.initiative += resolveValue(value ?? 0);
                         if (type === 'reset') newState.initiative = 0;
                         updated = true;
                     } else {
@@ -553,7 +551,6 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
         onLog({
             id: crypto.randomUUID(),
             type: 'ADD_TAB',
-            // eslint-disable-next-line react-hooks/purity
             timestamp: Date.now(),
             tabId: id,
             tabName: newTabName,
