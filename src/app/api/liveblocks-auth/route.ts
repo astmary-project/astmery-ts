@@ -11,19 +11,33 @@ export async function POST(_request: Request) {
     const { data: { user } } = await supabase.auth.getUser();
 
     // Get the current user from your database
+    let userName = "Anonymous";
+    let userAvatar = `https://liveblocks.io/avatars/avatar-${Math.floor(Math.random() * 30)}.png`;
+
+    if (user) {
+        // Try to fetch profile
+        const { data: profile } = await supabase
+            .from('user_profiles')
+            .select('display_name')
+            .eq('user_id', user.id)
+            .single();
+
+        userName = profile?.display_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email || "Anonymous";
+    }
+
     const userMeta = user
         ? {
             id: user.id,
             info: {
-                name: user.email || "Anonymous",
-                avatar: `https://liveblocks.io/avatars/avatar-${Math.floor(Math.random() * 30)}.png`,
+                name: userName,
+                avatar: userAvatar,
             },
         }
         : {
             id: `anon-${Math.floor(Math.random() * 10000)}`,
             info: {
                 name: "Anonymous",
-                avatar: `https://liveblocks.io/avatars/avatar-${Math.floor(Math.random() * 30)}.png`,
+                avatar: userAvatar,
             },
         };
 

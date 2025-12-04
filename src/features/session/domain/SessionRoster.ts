@@ -15,7 +15,11 @@ export interface SessionParticipant {
         mp: { current: number; max: number; initial?: number };
         initiative: number;
         resources: { id: string; name: string; current: number; max: number; initial: number }[];
-        nextAction?: string;
+        nextAction?: string | null;
+        pendingAction?: {
+            description: string;
+            cost: number;
+        } | null;
     };
 
     isVisible: boolean; // For GM to hide NPCs

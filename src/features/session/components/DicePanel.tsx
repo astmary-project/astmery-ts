@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { DiceRoller } from '@/domain/dice/DiceRoller';
 import { cn } from '@/lib/utils';
-import { Pencil, Plus, Send, Trash2, X } from 'lucide-react';
+import { Eye, EyeOff, Pencil, Plus, Send, Trash2, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { CharacterState, JAPANESE_TO_ENGLISH_STATS } from '../../character';
 import { CharacterCalculator } from '../../character/domain/CharacterCalculator';
@@ -18,6 +18,7 @@ import { CommandParser } from '../domain/CommandParser';
 import { MapToken, SessionLogEntry } from '../domain/SessionLog';
 import { SessionParticipant } from '../domain/SessionRoster';
 import { AutocompleteList } from './AutocompleteList';
+import { ChatPalette } from './ChatPalette';
 
 interface DicePanelProps {
     state: CharacterState; // Fallback/Mock state
@@ -28,6 +29,7 @@ interface DicePanelProps {
     tokens?: MapToken[];
     participants?: SessionParticipant[]; // Added participants
     currentUserId?: string;
+    currentUserName?: string;
     fixedIdentity?: { id: string; name: string };
     className?: string;
     selectedTokenId?: string; // Added prop
@@ -36,7 +38,7 @@ interface DicePanelProps {
     onDeleteLog?: (logId: string) => void;
 }
 
-export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, tabs = [], tokens = [], participants = [], currentUserId, fixedIdentity, className, selectedTokenId = 'self', onSelectToken, onUpdateLog, onDeleteLog }: DicePanelProps) {
+export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, tabs = [], tokens = [], participants = [], currentUserId, currentUserName, fixedIdentity, className, selectedTokenId = 'self', onSelectToken, onUpdateLog, onDeleteLog }: DicePanelProps) {
     const [input, setInput] = useState('');
     const [activeTab, setActiveTab] = useState('main');
     const [newTabName, setNewTabName] = useState('');
@@ -303,37 +305,105 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
         }
     };
 
+    const [isSecret, setIsSecret] = useState(false);
+
     const handleSend = () => {
         if (!input.trim()) return;
 
-        const senderName = fixedIdentity ? fixedIdentity.name : ((selectedToken ? selectedToken.name : 'Player') || 'Unknown');
+        const senderName = fixedIdentity ? fixedIdentity.name : ((selectedToken ? selectedToken.name : (currentUserName || 'Player')) || 'Unknown');
+
+        // Check for Secret Command (/s or /secret)
+        let content = input;
+        let secretMode = isSecret;
+
+        if (content.match(/^\/(s|secret)(\s+|$)/i)) {
+            secretMode = true;
+            content = content.replace(/^\/(s|secret)\s*/i, '');
+            if (!content.trim()) return; // Don't send empty secret
+        }
 
         // Intercept Plan/Action Command
-        // Syntax: :Plan <text> or :Action <text>
+        // Syntax: :Plan <text> [@<cost_expression>]
         // Check this BEFORE CommandParser because CommandParser returns empty for unknown commands
-        const planMatch = input.match(/^[:@](?:Plan|Action|P|A)\s+(.+)$/i);
+        const planMatch = content.match(/^[:@](?:Plan|Action|P|A)\s+(.+)$/i);
         if (planMatch && selectedParticipant) {
-            const actionText = planMatch[1];
-            onLog({
-                id: crypto.randomUUID(),
-                type: 'UPDATE_PARTICIPANT',
-                // eslint-disable-next-line react-hooks/purity
-                timestamp: Date.now(),
-                participant: {
-                    ...selectedParticipant,
-                    state: {
-                        ...selectedParticipant.state,
-                        nextAction: actionText
+            const fullText = planMatch[1];
+            // Check for cost syntax "@expression" at the end
+            // We use a regex that captures everything after the last @ as the expression
+            const costMatch = fullText.match(/@\s*([^@]+)$/);
+
+            if (costMatch) {
+                // Buffered Action
+                const costExpression = costMatch[1].trim();
+                const description = fullText.substring(0, costMatch.index).trim();
+
+                // Calculate Cost using DiceRoller
+                // We need to construct a RollContext
+                // activeState has stats merged, but DiceRoller expects separated stats/derivedStats
+                // However, our DiceRoller logic uses: context.stats[key] ?? context.derivedStats[key]
+                // So passing activeState.stats as 'stats' and empty 'derivedStats' should work fine
+                // since activeState.stats contains everything.
+                const rollContext = {
+                    stats: activeState.stats,
+                    derivedStats: activeState.derivedStats || {}
+                };
+
+                const costResult = DiceRoller.roll(costExpression, rollContext, JAPANESE_TO_ENGLISH_STATS);
+                let cost = 0;
+                let costDetails = '';
+
+                if (costResult.isSuccess) {
+                    cost = costResult.value.total;
+                    costDetails = `(Cost: ${costResult.value.total})`;
+                } else {
+                    console.warn('Failed to calculate cost:', costResult.error);
+                    // Fallback to simple parsing if DiceRoller fails (e.g. just a number)
+                    const simpleParse = parseInt(costExpression, 10);
+                    if (!isNaN(simpleParse)) {
+                        cost = simpleParse;
                     }
-                },
-                description: `${senderName} plans: ${actionText}`
-            });
+                }
+
+                onLog({
+                    id: crypto.randomUUID(),
+                    type: 'UPDATE_PARTICIPANT',
+                    // eslint-disable-next-line react-hooks/purity
+                    timestamp: Date.now(),
+                    participant: {
+                        ...selectedParticipant,
+                        state: {
+                            ...selectedParticipant.state,
+                            pendingAction: { description, cost }
+                        }
+                    },
+                    description: `${senderName} is planning an action... ${costDetails}`,
+                    visibleTo: secretMode && currentUserId ? [currentUserId] : undefined
+                });
+            } else {
+                // Direct Action (Legacy / No Cost)
+                onLog({
+                    id: crypto.randomUUID(),
+                    type: 'UPDATE_PARTICIPANT',
+                    // eslint-disable-next-line react-hooks/purity
+                    timestamp: Date.now(),
+                    participant: {
+                        ...selectedParticipant,
+                        state: {
+                            ...selectedParticipant.state,
+                            nextAction: fullText,
+                            pendingAction: undefined // Clear pending if direct set
+                        }
+                    },
+                    description: `${senderName} plans: ${fullText}`,
+                    visibleTo: secretMode && currentUserId ? [currentUserId] : undefined
+                });
+            }
             setInput('');
             return;
         }
 
         // Try parsing as a command first
-        const commandLogs = CommandParser.parse(input);
+        const commandLogs = CommandParser.parse(content);
         if (commandLogs.length > 0) {
             for (const commandLog of commandLogs) {
                 // Intercept Resource Updates for specific participants
@@ -345,71 +415,47 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
                     let updated = false;
 
                     // Helper to resolve value
-                    const resolveValue = (val: number | string | undefined, current: number): number => {
-                        if (val === undefined) return current;
+                    const resolveValue = (val: number | string, current: number): number => {
                         if (typeof val === 'number') return val;
-                        // Evaluate expression
-                        // For modify, we might have passed "-{Expr}" or "{Expr}"
-                        // We need to evaluate it against activeState
-                        const evaluated = CharacterCalculator.evaluateFormula(val, activeState);
-                        return evaluated;
+                        // Simple expression handling if needed, but CommandParser already handles simple numbers
+                        // If it's a string expression like "10+2", we might need eval or similar, but for now assume simple number string
+                        return parseFloat(val) || 0;
                     };
 
-                    if (targetRes === 'init' || targetRes === 'initiative') {
-                        const current = newState.initiative;
-                        let next = current;
-                        const resolvedVal = resolveValue(value, current);
+                    // Helper to apply update
+                    const applyUpdate = (current: number, max: number): number => {
+                        if (resetTarget === 'initial' || resetTarget === 'max') return max; // Reset to max for now (initial not tracked in roster state explicitly unless we check character)
+                        // Actually, roster state has max.
+                        if (type === 'reset') return max;
 
-                        if (type === 'set' && value !== undefined) next = resolvedVal;
-                        if (type === 'modify' && value !== undefined) next = current + resolvedVal;
-                        if (type === 'reset') next = 0;
+                        const numVal = resolveValue(value ?? 0, current);
+                        if (type === 'set') return numVal;
+                        if (type === 'modify') return current + numVal;
+                        return current;
+                    };
 
-                        newState.initiative = next;
-                        updated = true;
-                    } else if (targetRes === 'hp') {
-                        const current = newState.hp.current;
-                        const max = newState.hp.max;
-                        let next = current;
-
-                        const resolvedVal = resolveValue(value, current);
-
-                        if (type === 'set' && value !== undefined) next = resolvedVal;
-                        if (type === 'modify' && value !== undefined) next = current + resolvedVal;
-                        if (type === 'reset') next = resetTarget === 'max' ? max : max;
-                        newState.hp = { ...newState.hp, current: next };
+                    if (targetRes === 'hp') {
+                        newState.hp.current = applyUpdate(newState.hp.current, newState.hp.max);
                         updated = true;
                     } else if (targetRes === 'mp') {
-                        const current = newState.mp.current;
-                        const max = newState.mp.max;
-                        let next = current;
-
-                        const resolvedVal = resolveValue(value, current);
-
-                        if (type === 'set' && value !== undefined) next = resolvedVal;
-                        if (type === 'modify' && value !== undefined) next = current + resolvedVal;
-                        if (type === 'reset') next = resetTarget === 'max' ? max : max;
-                        newState.mp = { ...newState.mp, current: next };
+                        newState.mp.current = applyUpdate(newState.mp.current, newState.mp.max);
                         updated = true;
-                    } else if (newState.resources) {
-                        // Check generic resources
-                        const resIndex = newState.resources.findIndex(r => r.id.toLowerCase() === targetRes || r.name.toLowerCase() === targetRes);
-                        if (resIndex !== -1) {
-                            const res = newState.resources[resIndex];
-                            const current = res.current;
-                            const max = res.max;
-                            let next = current;
-
-                            const resolvedVal = resolveValue(value, current);
-
-                            if (type === 'set' && value !== undefined) next = resolvedVal;
-                            if (type === 'modify' && value !== undefined) next = current + resolvedVal;
-                            if (type === 'reset') next = resetTarget === 'max' ? max : max;
-
-                            // Update the specific resource in the array
-                            const newResources = [...newState.resources];
-                            newResources[resIndex] = { ...res, current: next };
-                            newState.resources = newResources;
-                            updated = true;
+                    } else if (targetRes === 'init' || targetRes === 'initiative') {
+                        // Initiative update
+                        if (type === 'set') newState.initiative = resolveValue(value ?? 0, newState.initiative);
+                        if (type === 'modify') newState.initiative += resolveValue(value ?? 0, newState.initiative);
+                        if (type === 'reset') newState.initiative = 0;
+                        updated = true;
+                    } else {
+                        // Custom Resource Update
+                        if (newState.resources) {
+                            const resIndex = newState.resources.findIndex(r => r.name?.toLowerCase() === targetRes || r.id === targetRes);
+                            if (resIndex >= 0) {
+                                const res = newState.resources[resIndex];
+                                const newVal = applyUpdate(res.current, res.max);
+                                newState.resources[resIndex] = { ...res, current: newVal };
+                                updated = true;
+                            }
                         }
                     }
 
@@ -423,35 +469,18 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
                                 ...selectedParticipant,
                                 state: newState
                             },
-                            description: `${senderName}: ${commandLog.description}`
+                            description: commandLog.description,
+                            visibleTo: secretMode && currentUserId ? [currentUserId] : undefined
                         });
-                        continue; // Process next command
                     }
-                }
-
-
-                // Intercept Reset All for specific participants
-                if (commandLog.type === 'RESET_RESOURCES' && selectedParticipant) {
+                } else if (commandLog.type === 'RESET_RESOURCES' && selectedParticipant) {
+                    // Reset All for Participant
                     const newState = { ...selectedParticipant.state };
-
-                    // Reset HP/MP (Use initial if available, else max)
-                    newState.hp = {
-                        ...newState.hp,
-                        current: newState.hp.initial !== undefined ? newState.hp.initial : newState.hp.max
-                    };
-                    newState.mp = {
-                        ...newState.mp,
-                        current: newState.mp.initial !== undefined ? newState.mp.initial : newState.mp.max
-                    };
-
-                    // Reset Custom Resources
+                    newState.hp.current = newState.hp.max;
+                    newState.mp.current = newState.mp.max;
                     if (newState.resources) {
-                        newState.resources = newState.resources.map(r => ({
-                            ...r,
-                            current: r.initial
-                        }));
+                        newState.resources = newState.resources.map(r => ({ ...r, current: r.max }));
                     }
-
                     onLog({
                         id: crypto.randomUUID(),
                         type: 'UPDATE_PARTICIPANT',
@@ -552,14 +581,21 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
         }
     };
 
-    const handleWheel = (e: React.WheelEvent) => {
-        if (e.deltaY !== 0) {
-            e.currentTarget.scrollLeft += e.deltaY;
-        }
-    };
-
     const scrollRef = useRef<HTMLDivElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [isAtBottom, setIsAtBottom] = useState(true);
+
+    // Auto-resize textarea
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+            // Ensure the scrollHeight is at least the min-height if set by CSS
+            if (textareaRef.current.clientHeight < textareaRef.current.scrollHeight) {
+                textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+            }
+        }
+    }, [input]);
 
     const handleScroll = () => {
         if (!scrollRef.current) return;
@@ -795,34 +831,75 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
         }
     };
 
+    const handlePaletteSelect = (text: string) => {
+        setInput(text);
+        // Optionally focus the textarea
+    };
+
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const handleWheel = (e: React.WheelEvent) => {
+        // Prevent default vertical scrolling if we are scrolling horizontally
+        if (e.deltaY !== 0) {
+            const container = e.currentTarget;
+            if (container) {
+                const delta = e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY;
+                container.scrollLeft += delta;
+            }
+        }
+    };
+
+    useEffect(() => {
+        if (containerRef.current) {
+            // console.log('Tab Container Dimensions:', {
+            //     scrollWidth: containerRef.current.scrollWidth,
+            //     clientWidth: containerRef.current.clientWidth,
+            //     offsetWidth: containerRef.current.offsetWidth
+            // });
+        }
+    });
+
     return (
-        <Card className={cn("h-full flex flex-col min-h-0 border-none shadow-none bg-transparent pb-0", className)}>
-            <CardHeader className="px-0 pt-0 pb-0">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <div className="flex items-center gap-2">
-                        <TabsList className="flex-1 justify-start bg-muted/50 p-1 h-10 overflow-x-auto no-scrollbar" onWheel={handleWheel}>
-                            {finalDisplayTabs.map(tab => (
-                                <TabsTrigger
-                                    key={tab.id}
-                                    value={tab.id}
-                                    className="data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200"
-                                >
-                                    {tab.label}
-                                    {tab.id !== 'main' && tab.id !== 'system' && (
-                                        <span
-                                            className="ml-2 hover:text-red-500 cursor-pointer opacity-50 hover:opacity-100 transition-opacity"
-                                            onClick={(e) => handleRemoveTab(e, tab.id)}
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </span>
-                                    )}
-                                </TabsTrigger>
-                            ))}
-                        </TabsList>
+        <Card className={cn("h-full flex flex-col min-h-0 border-none shadow-none bg-transparent pb-0 w-full max-w-full", className)}>
+            <CardHeader className="px-0 pt-0 pb-0 min-w-0">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
+                    <div className="flex items-center justify-between w-full py-1 gap-1 min-w-0">
+                        <div
+                            ref={containerRef}
+                            className="flex-1 overflow-x-auto min-w-0 no-scrollbar"
+                            onWheel={handleWheel}
+                            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                        >
+                            <TabsList
+                                className="h-8 bg-transparent p-0 gap-1 justify-start w-max min-w-full"
+                            >
+                                {finalDisplayTabs.map(tab => (
+                                    <TabsTrigger
+                                        key={tab.id}
+                                        value={tab.id}
+                                        className="h-7 px-3 text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-border flex items-center gap-1 shrink-0"
+                                    >
+                                        {tab.label}
+                                        {tab.id !== 'main' && tab.id !== 'system' && (
+                                            <span
+                                                className="ml-1 hover:text-red-500 cursor-pointer opacity-50 hover:opacity-100 transition-opacity"
+                                                onClick={(e) => handleRemoveTab(e, tab.id)}
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </span>
+                                        )}
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+                        </div>
                         <Dialog open={isAddTabOpen} onOpenChange={setIsAddTabOpen}>
                             <DialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 hover:bg-muted">
-                                    <Plus className="w-4 h-4" />
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground ml-1"
+                                >
+                                    <Plus className="h-3 w-3" />
                                 </Button>
                             </DialogTrigger>
                             <DialogContent>
@@ -841,6 +918,7 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
                                 </div>
                             </DialogContent>
                         </Dialog>
+
                     </div>
                 </Tabs>
             </CardHeader>
@@ -862,57 +940,85 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
                     </div>
                 </div>
 
-                <div className="bg-background/50 backdrop-blur-sm border rounded-xl p-3 shadow-sm space-y-3">
-                    <div className="flex items-center gap-2">
-                        {fixedIdentity ? (
-                            <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-md text-xs font-bold border border-primary/20 max-w-[200px]">
-                                <Avatar className="h-5 w-5">
-                                    <AvatarFallback className="bg-primary text-primary-foreground text-[10px]">{fixedIdentity.name[0]}</AvatarFallback>
-                                </Avatar>
-                                <span className="truncate">{fixedIdentity.name}</span>
+                <div className="p-3 border-t bg-background/50 backdrop-blur-sm">
+                    <div className="bg-background/50 backdrop-blur-sm border rounded-xl p-3 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                                {fixedIdentity ? (
+                                    <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-md text-xs font-bold border border-primary/20 max-w-[200px]">
+                                        <Avatar className="h-5 w-5">
+                                            <AvatarFallback className="bg-primary text-primary-foreground text-[10px]">{fixedIdentity.name[0]}</AvatarFallback>
+                                        </Avatar>
+                                        <span className="truncate">{fixedIdentity.name}</span>
+                                    </div>
+                                ) : (
+                                    <Select value={selectedTokenId} onValueChange={(val) => onSelectToken?.(val)}>
+                                        <SelectTrigger className="h-8 text-xs w-[180px] bg-background/50 border-muted-foreground/20">
+                                            <SelectValue placeholder="Select Identity" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="self">{currentUserName || 'Player'} (Self)</SelectItem>
+                                            {isMounted && myTokens.map(token => (
+                                                <SelectItem key={token.id} value={token.id}>{token.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
                             </div>
-                        ) : (
-                            <Select value={selectedTokenId} onValueChange={(val) => onSelectToken?.(val)}>
-                                <SelectTrigger className="h-8 text-xs w-[180px] bg-background/50 border-muted-foreground/20">
-                                    <SelectValue placeholder="Select Identity" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="self">Player (Self)</SelectItem>
-                                    {isMounted && myTokens.map(token => (
-                                        <SelectItem key={token.id} value={token.id}>{token.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )}
-                    </div>
 
-                    <div className="flex gap-2 relative">
-                        {autocomplete.type && (
-                            <AutocompleteList
-                                items={suggestions}
-                                selectedIndex={selectedIndex}
-                                onSelect={handleSelectSuggestion}
+                            <div className="flex items-center gap-1">
+                                <ChatPalette state={activeState} onSelect={handlePaletteSelect} />
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className={cn(
+                                        "h-8 px-2 gap-1.5 transition-colors text-xs font-medium",
+                                        isSecret ? "bg-indigo-500/20 text-indigo-500 hover:bg-indigo-500/30 hover:text-indigo-600" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                    )}
+                                    onClick={() => setIsSecret(!isSecret)}
+                                    title={isSecret ? "Secret Mode ON (Visible only to you)" : "Secret Mode OFF (Public)"}
+                                >
+                                    {isSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                    <span>{isSecret ? "Secret" : "Public"}</span>
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 relative">
+                            {autocomplete.type && (
+                                <AutocompleteList
+                                    items={suggestions}
+                                    selectedIndex={selectedIndex}
+                                    onSelect={handleSelectSuggestion}
+                                />
+                            )}
+                            <Textarea
+                                ref={textareaRef}
+                                value={input}
+                                onChange={handleInputChange}
+                                onKeyDown={handleKeyDown}
+                                placeholder={isSecret ? "Type a secret message..." : "Type a message or command..."}
+                                className={cn(
+                                    "min-h-[40px] max-h-[120px] resize-none py-2 text-sm",
+                                    isSecret ? "bg-indigo-500/5 border-indigo-500/20 placeholder:text-indigo-500/50" : ""
+                                )}
+                                rows={1}
                             />
-                        )}
-                        <Textarea
-                            value={input}
-                            onChange={handleInputChange}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Type a message or command..."
-                            className="min-h-[40px] max-h-[120px] resize-none py-2 text-sm"
-                            rows={1}
-                        />
-                        <Button
-                            size="icon"
-                            className="h-10 w-10 shrink-0"
-                            onClick={handleSend}
-                            disabled={!input.trim()}
-                        >
-                            <Send className="w-4 h-4" />
-                        </Button>
+                            <Button
+                                size="icon"
+                                className={cn(
+                                    "h-10 w-10 shrink-0 transition-colors",
+                                    isSecret ? "bg-indigo-500 hover:bg-indigo-600" : ""
+                                )}
+                                onClick={handleSend}
+                                disabled={!input.trim()}
+                            >
+                                <Send className="w-4 h-4" />
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </CardContent>
-        </Card>
+        </Card >
     );
 }

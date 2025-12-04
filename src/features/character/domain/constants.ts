@@ -16,6 +16,14 @@ export const STAT_LABELS: Record<string, string> = {
     'KnowledgeCheck': '知識判定',
     'GatheringCount': '採集回数',
     'SpellCheck': '魔術行使判定',
+    'HitCheck': '命中判定',
+    'AvoidanceCheck': '回避判定',
+    'SpiritResistanceCheck': '精神抵抗判定',
+    'SpellResistanceCheck': '魔術抵抗判定',
+    'CreatureKnowledgeCheck': '生体知識判定',
+    'ScienceKnowledgeCheck': '科学知識判定',
+    'InitiativeCheck': '先制判定',
+    'MagicCheck': '魔法行使判定',
     'DamageDice': 'ダメージダイス',
 };
 
