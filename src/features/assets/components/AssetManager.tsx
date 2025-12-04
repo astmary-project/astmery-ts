@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { Loader2, Music, Trash2, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Asset, AssetType } from '../domain/Asset';
-import { SupabaseAssetRepository } from '../infrastructure/SupabaseAssetRepository';
+import { R2AssetRepository } from '../infrastructure/R2AssetRepository';
 
 interface AssetManagerProps {
     onSelect?: (asset: Asset) => void;
@@ -21,7 +21,7 @@ export function AssetManager({ onSelect, className, initialTab = 'image' }: Asse
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
-    const [repository] = useState(() => new SupabaseAssetRepository());
+    const [repository] = useState(() => new R2AssetRepository());
 
     const loadAssets = async (type: AssetType) => {
         setIsLoading(true);
@@ -41,6 +41,22 @@ export function AssetManager({ onSelect, className, initialTab = 'image' }: Asse
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+
+        // File size validation
+        const MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20MB
+        const MAX_AUDIO_SIZE = 50 * 1024 * 1024; // 50MB
+
+        if (activeTab === 'image' && file.size > MAX_IMAGE_SIZE) {
+            alert(`Image too large. Max size is 20MB.\nYour file: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+            e.target.value = '';
+            return;
+        }
+
+        if (activeTab === 'audio' && file.size > MAX_AUDIO_SIZE) {
+            alert(`Audio too large. Max size is 50MB.\nYour file: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+            e.target.value = '';
+            return;
+        }
 
         setIsUploading(true);
         const result = await repository.upload(file, activeTab);
@@ -110,6 +126,9 @@ export function AssetManager({ onSelect, className, initialTab = 'image' }: Asse
                                 <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
                                     <p>No assets found.</p>
                                     <p className="text-sm">Upload some files to get started.</p>
+                                    <p className="text-xs mt-2 opacity-70">
+                                        Max size: {activeTab === 'image' ? '20MB' : '50MB'}
+                                    </p>
                                 </div>
                             ) : (
                                 <div className={cn(
