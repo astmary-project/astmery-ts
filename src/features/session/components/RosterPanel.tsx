@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CharacterData } from '@/features/character/domain/repository/ICharacterRepository';
-import { SupabaseCharacterRepository } from '@/features/character/infrastructure/SupabaseCharacterRepository';
+import { useCharacterRepository } from '@/features/character/hooks/useCharacterReposittories';
 import { cn } from '@/lib/utils';
 import { Plus, Search, Trash2, UserPlus } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -34,6 +34,7 @@ export function RosterPanel({ participants, onAddExtra, onAddLinked, onRemove, o
     const [availableCharacters, setAvailableCharacters] = useState<CharacterData[]>([]);
     const [isLoadingCharacters, setIsLoadingCharacters] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const repo = useCharacterRepository();
 
     const handleAddExtra = () => {
         if (!extraName.trim()) return;
@@ -46,7 +47,6 @@ export function RosterPanel({ participants, onAddExtra, onAddLinked, onRemove, o
         if (isImportOpen && availableCharacters.length === 0) {
             const fetchCharacters = async () => {
                 setIsLoadingCharacters(true);
-                const repo = new SupabaseCharacterRepository();
                 const result = await repo.listAll();
                 if (result.isSuccess) {
                     setAvailableCharacters(result.value);

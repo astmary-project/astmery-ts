@@ -12,11 +12,9 @@ export const useCharacterFilter = (characters: CharacterData[]) => {
         const owners = new Set<string>();
 
         characters.forEach(c => {
-            // Extract tags from logs
-            c.logs.forEach((log) => {
-                if (log.type === 'ADD_TAG') tags.add(log.tagId!);
-                if (log.type === 'REMOVE_TAG') tags.delete(log.tagId!);
-            });
+            // Extract tags from profile
+            const charTags = c.profile?.tags || [];
+            charTags.forEach(tag => tags.add(tag));
 
             if (c.ownerName) {
                 owners.add(c.ownerName);
@@ -34,12 +32,8 @@ export const useCharacterFilter = (characters: CharacterData[]) => {
         return characters.filter(char => {
             const matchesSearch = char.name.toLowerCase().includes(searchTerm.toLowerCase());
 
-            const charTags = new Set<string>();
-            char.logs.forEach((log) => {
-                if (log.type === 'ADD_TAG') charTags.add(log.tagId!);
-                if (log.type === 'REMOVE_TAG') charTags.delete(log.tagId!);
-            });
-            const matchesTag = selectedTag === 'all' || charTags.has(selectedTag);
+            const charTags = char.profile?.tags || [];
+            const matchesTag = selectedTag === 'all' || charTags.includes(selectedTag);
 
             const matchesOwner = selectedOwner === 'all' || char.ownerName === selectedOwner;
 

@@ -1,21 +1,48 @@
 import { AppError } from '@/domain/shared/AppError';
 import { err, ok, Result } from '@/domain/shared/Result';
-import { supabase } from '@/lib/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { CharacterData, ICharacterRepository } from '../domain/repository/ICharacterRepository';
 
 export class SupabaseCharacterRepository implements ICharacterRepository {
+    constructor(private client: SupabaseClient) { }
+
     async save(character: CharacterData): Promise<Result<void, AppError>> {
         try {
-            const { error } = await supabase
+            const { error } = await this.client
                 .from('characters')
                 .upsert({
                     id: character.id,
                     name: character.name,
-                    logs: character.logs,
-                    profile: character.profile,
-                    user_id: character.userId, // Save userId
+                    // logs: character.logs, // Deprecated: logs are now in character_logs table
+                    profile: character.profile, // Contains tags
+                    user_id: character.userId,
                     updated_at: new Date().toISOString(),
                 });
+
+            if (error) {
+                console.error('Failed to save character:', error);
+                return err(AppError.internal('Failed to save character', error));
+            }
+
+            // Save logs to character_logs table
+            if (character.logs.length > 0) {
+                const logRows = character.logs.map(log => ({
+                    id: log.id,
+                    character_id: character.id,
+                    type: log.type,
+                    payload: log,
+                    created_at: new Date(log.timestamp).toISOString(),
+                }));
+
+                const { error: logError } = await this.client
+                    .from('character_logs')
+                    .upsert(logRows);
+
+                if (logError) {
+                    console.error('Failed to save character logs:', logError);
+                    return err(AppError.internal('Failed to save character logs', logError));
+                }
+            }
 
             if (error) {
                 console.error('Failed to save character:', error);
@@ -30,9 +57,9 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
 
     async load(id: string): Promise<Result<CharacterData, AppError>> {
         try {
-            const { data, error } = await supabase
+            const { data, error } = await this.client
                 .from('characters')
-                .select('*')
+                .select('*, character_logs(*)')
                 .eq('id', id)
                 .single();
 
@@ -47,11 +74,16 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
 
             if (!data) return err(AppError.notFound(`Character not found: ${id}`));
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const logs = (data.character_logs as any[])?.map((row: any) => row.payload as import('../domain/CharacterLog').CharacterLogEntry) || [];
+            // Sort logs by timestamp just in case DB doesn't ensure order
+            logs.sort((a, b) => a.timestamp - b.timestamp);
+
             return ok({
                 id: data.id,
                 name: data.name,
-                logs: data.logs as import('../domain/CharacterLog').CharacterLogEntry[], // Type assertion needed for JSONB
-                profile: data.profile as { avatarUrl?: string; bio?: string; specialtyElements?: string[] },
+                logs: logs,
+                profile: data.profile as { avatarUrl?: string; bio?: string; specialtyElements?: string[]; tags?: string[] },
                 userId: data.user_id, // Load userId
             });
         } catch (e) {
@@ -61,9 +93,9 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
 
     async listAll(): Promise<Result<CharacterData[], AppError>> {
         try {
-            const { data: characters, error } = await supabase
+            const { data: characters, error } = await this.client
                 .from('characters')
-                .select('*')
+                .select('*, character_logs(*)')
                 .order('updated_at', { ascending: false });
 
             if (error) {
@@ -76,7 +108,7 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
             let profiles: Record<string, string> = {};
 
             if (userIds.length > 0) {
-                const { data: profileData } = await supabase
+                const { data: profileData } = await this.client
                     .from('user_profiles')
                     .select('user_id, display_name')
                     .in('user_id', userIds);
@@ -86,21 +118,27 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
                 }
             }
 
-            return ok((characters || []).map(d => ({
-                id: d.id,
-                name: d.name,
-                logs: d.logs as import('../domain/CharacterLog').CharacterLogEntry[],
-                profile: d.profile as { avatarUrl?: string; bio?: string; specialtyElements?: string[] },
-                userId: d.user_id,
-                ownerName: profiles[d.user_id] || undefined,
-            })));
+            return ok((characters || []).map(d => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const logs = (d.character_logs as any[])?.map((row: any) => row.payload as import('../domain/CharacterLog').CharacterLogEntry) || [];
+                logs.sort((a: import('../domain/CharacterLog').CharacterLogEntry, b: import('../domain/CharacterLog').CharacterLogEntry) => a.timestamp - b.timestamp);
+
+                return {
+                    id: d.id,
+                    name: d.name,
+                    logs: logs,
+                    profile: d.profile as { avatarUrl?: string; bio?: string; specialtyElements?: string[]; tags?: string[] },
+                    userId: d.user_id,
+                    ownerName: profiles[d.user_id] || undefined,
+                };
+            }));
         } catch (e) {
             return err(AppError.internal('Unexpected error listing characters', e));
         }
     }
     async delete(id: string): Promise<Result<void, AppError>> {
         try {
-            const { error } = await supabase
+            const { error } = await this.client
                 .from('characters')
                 .delete()
                 .eq('id', id);

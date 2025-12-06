@@ -13,6 +13,7 @@ export interface CharacterData {
         avatarUrl?: string;
         bio?: string;
         specialtyElements?: string[];
+        tags?: string[];
     };
     userId?: string;
     ownerName?: string;
