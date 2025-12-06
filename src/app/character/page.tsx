@@ -6,9 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ICharacterRepository } from '@/features/character/domain/repository/ICharacterRepository';
 import { useCharacterFilter } from '@/features/character/hooks/useCharacterFilter';
-import { SupabaseCharacterRepository } from '@/features/character/infrastructure/SupabaseCharacterRepository';
+import { useCharacterRepository } from '@/features/character/hooks/useCharacterReposittories';
 import { supabase } from '@/lib/supabase';
 import { Plus, Search, User } from 'lucide-react';
 import Link from 'next/link';
@@ -16,12 +15,13 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 // Repository instance
-const repository: ICharacterRepository = new SupabaseCharacterRepository();
+
 
 export default function CharacterListPage() {
     const router = useRouter();
     const [characters, setCharacters] = useState<import('@/features/character/domain/repository/ICharacterRepository').CharacterData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const repository = useCharacterRepository();
 
     useEffect(() => {
         const fetchCharacters = async () => {
@@ -135,12 +135,7 @@ export default function CharacterListPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredCharacters.map((char) => {
                     // Calculate tags for display
-                    const tags = new Set<string>();
-                    char.logs.forEach((log) => {
-                        if (log.type === 'ADD_TAG') tags.add(log.tagId!);
-                        if (log.type === 'REMOVE_TAG') tags.delete(log.tagId!);
-                    });
-                    const displayTags = Array.from(tags);
+                    const displayTags = char.profile?.tags || [];
 
                     return (
                         <Link key={char.id} href={`/character/${char.id}`} className="block group">

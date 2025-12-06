@@ -37,6 +37,8 @@ interface CharacterSheetProps {
     characterId?: string;
     isAdmin?: boolean;
     onDeleteCharacter?: () => void;
+    onAddTag?: (tag: string) => void;
+    onRemoveTag?: (tag: string) => void;
 }
 export function CharacterSheet({
     name,
@@ -57,6 +59,8 @@ export function CharacterSheet({
     onDeleteCharacter,
     isEditMode: propIsEditMode,
     onToggleEditMode,
+    onAddTag,
+    onRemoveTag,
 }: CharacterSheetProps) {
     // State
     // const [logs, setLogs] = useState<SessionLogEntry[]>(initialLogs); // Removed to avoid shadowing and use prop
@@ -202,8 +206,8 @@ export function CharacterSheet({
                                 resourceValues={resourceValues}
                                 tags={state.tags}
                                 isEditMode={isEditMode}
-                                onAddTag={(tag) => onAddLog({ type: 'ADD_TAG', tagId: tag, description: `Added tag: ${tag}` })}
-                                onRemoveTag={(tag) => onAddLog({ type: 'REMOVE_TAG', tagId: tag, description: `Removed tag: ${tag}` })}
+                                onAddTag={onAddTag || ((tag) => onAddLog({ type: 'ADD_TAG', tagId: tag, description: `Added tag: ${tag}` }))}
+                                onRemoveTag={onRemoveTag || ((tag) => onAddLog({ type: 'REMOVE_TAG', tagId: tag, description: `Removed tag: ${tag}` }))}
                             />
                         </TabsContent>
 
@@ -238,8 +242,8 @@ export function CharacterSheet({
                                 tags={state.tags}
                                 isEditMode={isEditMode}
                                 onUpdateBio={(bio) => onUpdateProfile?.({ bio })}
-                                onAddTag={(tag) => onAddLog({ type: 'ADD_TAG', tagId: tag, description: `Added tag: ${tag}` })}
-                                onRemoveTag={(tag) => onAddLog({ type: 'REMOVE_TAG', tagId: tag, description: `Removed tag: ${tag}` })}
+                                onAddTag={onAddTag || ((tag) => onAddLog({ type: 'ADD_TAG', tagId: tag, description: `Added tag: ${tag}` }))}
+                                onRemoveTag={onRemoveTag || ((tag) => onAddLog({ type: 'REMOVE_TAG', tagId: tag, description: `Removed tag: ${tag}` }))}
                                 onDeleteCharacter={onDeleteCharacter}
                             />
                         </TabsContent>

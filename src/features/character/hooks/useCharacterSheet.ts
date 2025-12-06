@@ -6,7 +6,7 @@ import { ICharacterRepository } from '../domain/repository/ICharacterRepository'
 import { SupabaseCharacterRepository } from '../infrastructure/SupabaseCharacterRepository';
 
 // Use Supabase repository
-const repository: ICharacterRepository = new SupabaseCharacterRepository();
+const repository: ICharacterRepository = new SupabaseCharacterRepository(supabase);
 
 export const useCharacterSheet = (characterId: string, sessionContext?: CharacterCalculator.SessionContext) => {
     const [name, setName] = useState<string>('');
@@ -15,6 +15,7 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
         avatarUrl?: string;
         bio?: string;
         specialtyElements?: string[];
+        tags?: string[];
     }>();
 
     const [isLoading, setIsLoading] = useState(true);
@@ -26,9 +27,14 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
     // Ideally, we might want to store the state in React state if calculation is heavy,
     // but CharacterCalculator is fast enough for now.
     // Calculated State
+    // We calculate this on every render or useMemo. Since logs can be large, useMemo is better.
+    // But for now, let's calculate it inside the hook body or useMemo.
+    // Ideally, we might want to store the state in React state if calculation is heavy,
+    // but CharacterCalculator is fast enough for now.
+    // Calculated State
     const state: CharacterState = useMemo(() => {
-        return CharacterCalculator.calculateState(logs, {}, sessionContext);
-    }, [logs, sessionContext]);
+        return CharacterCalculator.calculateState(logs, {}, sessionContext, characterProfile?.tags || []);
+    }, [logs, sessionContext, characterProfile?.tags]);
 
     const [userId, setUserId] = useState<string | undefined>();
     const [ownerName, setOwnerName] = useState<string | undefined>();
@@ -141,7 +147,7 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
         });
     };
 
-    const save = async (name: string, currentLogs: CharacterLogEntry[], profile: { avatarUrl?: string; bio?: string; specialtyElements?: string[] } | undefined) => {
+    const save = async (name: string, currentLogs: CharacterLogEntry[], profile: { avatarUrl?: string; bio?: string; specialtyElements?: string[]; tags?: string[] } | undefined) => {
         try {
             const result = await repository.save({
                 id: characterId,
@@ -163,6 +169,18 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
         const newProfile = { ...characterProfile, ...profile };
         setCharacterProfile(newProfile);
         await save(name, logs, newProfile);
+    };
+
+    const addTag = async (tag: string) => {
+        const currentTags = characterProfile?.tags || [];
+        if (!currentTags.includes(tag)) {
+            await updateProfile({ tags: [...currentTags, tag] });
+        }
+    };
+
+    const removeTag = async (tag: string) => {
+        const currentTags = characterProfile?.tags || [];
+        await updateProfile({ tags: currentTags.filter(t => t !== tag) });
     };
 
     const updateName = async (name: string) => {
@@ -226,6 +244,8 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
         addLog,
         deleteLog,
         updateProfile,
+        addTag,
+        removeTag,
         updateCharacter,
         reload: () => window.location.reload(), // Temp
         userId, // Return userId

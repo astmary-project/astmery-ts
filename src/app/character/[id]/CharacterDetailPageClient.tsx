@@ -2,7 +2,7 @@
 
 import { CharacterSheet } from '@/features/character/components/CharacterSheet';
 import { useCharacterSheet } from '@/features/character/hooks/useCharacterSheet';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 
 interface CharacterDetailPageClientProps {
     currentUserId?: string;
@@ -26,17 +26,14 @@ export function CharacterDetailPageClient({ currentUserId }: CharacterDetailPage
         userId: ownerId, // Get ownerId from hook
         ownerName, // Get ownerName from hook
         isAdmin, // Get isAdmin from hook
-        deleteCharacter
+        deleteCharacter,
+        addTag,
+        removeTag
     } = useCharacterSheet(characterId);
 
-    const router = useRouter();
 
-    const handleDelete = async () => {
-        const success = await deleteCharacter();
-        if (success) {
-            router.push('/character');
-        }
-    };
+
+
 
     if (isLoading) {
         return <div className="p-8 text-center">Loading...</div>;
@@ -62,7 +59,9 @@ export function CharacterDetailPageClient({ currentUserId }: CharacterDetailPage
                 ownerName={ownerName}
                 characterId={characterId}
                 isAdmin={isAdmin}
-                onDeleteCharacter={handleDelete}
+                onDeleteCharacter={deleteCharacter}
+                onAddTag={addTag}
+                onRemoveTag={removeTag}
             />
         </div>
     );
