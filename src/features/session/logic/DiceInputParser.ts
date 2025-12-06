@@ -50,7 +50,7 @@ export class DiceInputParser {
 
         // So we should go from left to right and keep the last valid one.
 
-        let currentPrefix = "";
+
 
         // Reconstruct parts with original spaces? 
         // split(/\s+/) loses the exact whitespace.

@@ -38,12 +38,13 @@ export class CharacterCalculator {
     public static calculateState(
         logs: CharacterLogEntry[],
         baseStats: Record<string, number> = {},
-        sessionContext: CharacterCalculator.SessionContext = {}
+        sessionContext: CharacterCalculator.SessionContext = {},
+        initialTags: string[] = []
     ): CharacterState {
         const state: CharacterState = {
             ...this.DEFAULT_STATE,
             stats: { ...baseStats },
-            tags: new Set(),
+            tags: new Set(initialTags),
             equipment: [],
             skills: [],
             skillWishlist: [],
@@ -214,10 +215,12 @@ export class CharacterCalculator {
                 }
                 break;
             case 'ADD_TAG':
-                if (log.tagId) state.tags.add(log.tagId);
+                // Deprecated: Tags are now managed via profile.tags
+                // if (log.tagId) state.tags.add(log.tagId);
                 break;
             case 'REMOVE_TAG':
-                if (log.tagId) state.tags.delete(log.tagId);
+                // Deprecated: Tags are now managed via profile.tags
+                // if (log.tagId) state.tags.delete(log.tagId);
                 break;
             case 'EQUIP':
                 if (log.item) {
