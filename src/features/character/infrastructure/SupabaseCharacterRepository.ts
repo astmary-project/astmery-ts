@@ -44,11 +44,6 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
                 }
             }
 
-            if (error) {
-                console.error('Failed to save character:', error);
-                return err(AppError.internal('Failed to save character', error));
-            }
-
             return ok(undefined);
         } catch (e) {
             return err(AppError.internal('Unexpected error saving character', e));
@@ -93,9 +88,10 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
 
     async listAll(): Promise<Result<CharacterData[], AppError>> {
         try {
+            // ★修正: character_logs(*) を削除。ここを軽量化するのが目的でした！
             const { data: characters, error } = await this.client
                 .from('characters')
-                .select('*, character_logs(*)')
+                .select('*')
                 .order('updated_at', { ascending: false });
 
             if (error) {
@@ -103,7 +99,7 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
                 return err(AppError.internal('Failed to list characters', error));
             }
 
-            // Fetch user profiles for the characters
+            // ユーザー名の取得ロジック（そのまま）
             const userIds = Array.from(new Set(characters?.map(c => c.user_id).filter(Boolean) || []));
             let profiles: Record<string, string> = {};
 
@@ -118,24 +114,20 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
                 }
             }
 
-            return ok((characters || []).map(d => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const logs = (d.character_logs as any[])?.map((row: any) => row.payload as import('../domain/CharacterLog').CharacterLogEntry) || [];
-                logs.sort((a: import('../domain/CharacterLog').CharacterLogEntry, b: import('../domain/CharacterLog').CharacterLogEntry) => a.timestamp - b.timestamp);
-
-                return {
-                    id: d.id,
-                    name: d.name,
-                    logs: logs,
-                    profile: d.profile as { avatarUrl?: string; bio?: string; specialtyElements?: string[]; tags?: string[] },
-                    userId: d.user_id,
-                    ownerName: profiles[d.user_id] || undefined,
-                };
-            }));
+            return ok((characters || []).map(d => ({
+                id: d.id,
+                name: d.name,
+                logs: [], // ★重要: 一覧画面ではログの中身は不要なので空にする！
+                // profileの中にタグが入っているので、一覧画面でのタグ表示はこれで動きます
+                profile: d.profile as { avatarUrl?: string; bio?: string; specialtyElements?: string[]; tags?: string[] },
+                userId: d.user_id,
+                ownerName: profiles[d.user_id] || undefined,
+            })));
         } catch (e) {
             return err(AppError.internal('Unexpected error listing characters', e));
         }
     }
+
     async delete(id: string): Promise<Result<void, AppError>> {
         try {
             const { error } = await this.client
