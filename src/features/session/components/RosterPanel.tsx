@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CharacterData } from '@/features/character/domain/repository/ICharacterRepository';
-import { useCharacterRepository } from '@/features/character/hooks/useCharacterReposittories';
+import { useCharacterRepository } from '@/features/character/hooks/useCharacterRepositories';
 import { cn } from '@/lib/utils';
 import { Plus, Search, Trash2, UserPlus } from 'lucide-react';
 import { useEffect, useState } from 'react';

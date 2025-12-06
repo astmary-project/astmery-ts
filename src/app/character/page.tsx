@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCharacterFilter } from '@/features/character/hooks/useCharacterFilter';
-import { useCharacterRepository } from '@/features/character/hooks/useCharacterReposittories';
+import { useCharacterRepository } from '@/features/character/hooks/useCharacterRepositories';
 import { supabase } from '@/lib/supabase';
 import { Plus, Search, User } from 'lucide-react';
 import Link from 'next/link';
