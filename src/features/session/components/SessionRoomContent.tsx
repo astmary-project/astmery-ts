@@ -5,7 +5,7 @@ import { CharacterCalculator } from '@/features/character/domain/CharacterCalcul
 import { CharacterData } from '@/features/character/domain/repository/ICharacterRepository';
 import { useMutation, useSelf, useStorage } from '@/liveblocks.config';
 import { useEffect, useState } from 'react';
-import { CharacterState } from '../../character';
+import { CharacterState } from '../../character/domain/models';
 import { getCharactersStats } from '../actions/character';
 import { getLogs, saveLog } from '../actions/session';
 import { MapToken, ScreenPanel, SessionLogEntry } from '../domain/SessionLog';
@@ -27,12 +27,13 @@ const MOCK_CHARACTER_STATE: CharacterState = {
         'DamageDice': 2, // ceil(Grade(10)/5)
         'Grade': 10,
     },
+    inventory: [],
+    equipmentSlots: [],
     resources: [
-        { id: 'mp', name: 'MP', initial: 10, max: 10, min: 0 },
+        { id: 'mp', name: 'MP', initial: '10', max: '10', min: '0', resetMode: 'initial' },
     ],
     skills: [],
-    tags: new Set(),
-    equipment: [],
+    tags: [],
     skillWishlist: [],
     exp: { total: 0, used: 0, free: 0 },
     derivedStats: {},
@@ -50,7 +51,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         storage.get('logs').push(log);
     }, []);
 
-    // Mutation to update log
     const updateLog = useMutation(({ storage }, logId: string, content: string) => {
         const logs = storage.get('logs');
         const index = logs.findIndex(l => l.id === logId);
@@ -68,7 +68,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         }
     }, []);
 
-    // Mutation to delete log
     const deleteLog = useMutation(({ storage }, logId: string) => {
         const logs = storage.get('logs');
         const index = logs.findIndex(l => l.id === logId);
@@ -79,14 +78,12 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
 
     const logsArray = logs ? Array.from(logs) : [];
 
-    // Derive resource values (Legacy support for debug info, can be removed later)
     const resourceValues = logsArray.reduce((acc, log) => {
         if (log.type === 'UPDATE_RESOURCE' && log.resourceUpdate) {
-            const { resourceId, type, value, resetTarget } = log.resourceUpdate;
+            const { resourceId, type, value } = log.resourceUpdate;
             const current = acc[resourceId] ?? 0;
             let next = current;
 
-            // Simple parsing for legacy debug display (no complex formula eval here)
             const numValue = typeof value === 'number' ? value : parseFloat(value || '0');
             const safeValue = isNaN(numValue) ? 0 : numValue;
 
@@ -94,8 +91,10 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
             if (type === 'modify' && value !== undefined) next = current + safeValue;
             if (type === 'reset') {
                 const res = MOCK_CHARACTER_STATE.resources.find(r => r.id === resourceId);
+                // Note: handling mock resource logic here is fragile if we use formulas in strings
+                // But this block is "Legacy support for debug info".
                 if (res) {
-                    next = resetTarget === 'max' ? res.max : res.initial;
+                    next = parseFloat(res.initial || '0'); // Basic parsing
                 }
             }
             return { ...acc, [resourceId]: next };
@@ -103,7 +102,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         return acc;
     }, { 'hp': 20, 'mp': 10 } as Record<string, number>);
 
-    // Derive Roster State
     const participants = logsArray.reduce((acc, log: SessionLogEntry) => {
         if (log.type === 'ADD_PARTICIPANT' && log.participant) {
             acc.push(log.participant as SessionParticipant);
@@ -112,7 +110,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         } else if (log.type === 'UPDATE_PARTICIPANT' && log.participant && log.participant.id) {
             const index = acc.findIndex(p => p.id === log.participant!.id);
             if (index !== -1) {
-                // Merge state carefully to preserve resources if not in update
                 const update = log.participant as Partial<SessionParticipant>;
                 acc[index] = {
                     ...acc[index],
@@ -127,7 +124,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         return acc;
     }, [] as SessionParticipant[]);
 
-    // Derive Map State
     const mapState = logsArray.reduce((acc, log: SessionLogEntry) => {
         if (log.type === 'UPDATE_MAP_BACKGROUND' && log.mapBackground) {
             acc.backgroundUrl = log.mapBackground.url;
@@ -181,10 +177,7 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
     }, [{ id: 'main', label: 'Main' }, { id: 'system', label: 'System' }]);
 
     const handleLog = async (log: SessionLogEntry) => {
-        // 1. Update Liveblocks (Real-time)
         addLog(log);
-
-        // 2. Persist to Supabase (Async)
         saveLog(roomId, log).then(result => {
             if (!result.success) {
                 console.error('Failed to persist log:', result.error);
@@ -193,25 +186,23 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
     };
 
     const handleAddLinked = (character: CharacterData) => {
-        // Calculate initial state from character logs
-        const state = CharacterCalculator.calculateState(character.logs);
+        const state = CharacterCalculator.calculateState(character.events);
 
-        // Extract HP/MP/Initiative
-        // Note: Resources might have different IDs, but we assume standard 'hp'/'mp' or 'HP'/'MP' exist or are derived.
-        // We look for resources with id 'hp' or 'HP' (case insensitive if needed, but IDs are usually specific)
+        // helper to eval
+        const evalNum = (formula: string | undefined) => formula ? CharacterCalculator.evaluateFormula(formula, state) : 0;
+
         const hpRes = state.resources.find(r => r.id.toLowerCase() === 'hp');
         const mpRes = state.resources.find(r => r.id.toLowerCase() === 'mp');
-        const initiative = 0; // Start at 0 per user request
+        const initiative = 0;
 
-        // Filter out HP/MP from other resources to avoid duplication in display
         const otherResources = state.resources
             .filter(r => r.id.toLowerCase() !== 'hp' && r.id.toLowerCase() !== 'mp')
             .map(r => ({
                 id: r.id,
                 name: r.name,
-                current: r.initial, // Start at initial
-                max: r.max,
-                initial: r.initial
+                current: evalNum(r.initial),
+                max: evalNum(r.max),
+                initial: evalNum(r.initial)
             }));
 
         const newParticipant: SessionParticipant = {
@@ -222,14 +213,14 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
             characterId: character.id,
             state: {
                 hp: {
-                    current: hpRes ? hpRes.max : 0, // Start at Max
-                    max: hpRes ? hpRes.max : 0,
-                    initial: hpRes ? (hpRes.initial ?? hpRes.max) : 0
+                    current: evalNum(hpRes?.max),
+                    max: evalNum(hpRes?.max),
+                    initial: evalNum(hpRes?.initial ?? hpRes?.max)
                 },
                 mp: {
-                    current: mpRes ? mpRes.max : 0, // Start at Max
-                    max: mpRes ? mpRes.max : 0,
-                    initial: mpRes ? (mpRes.initial ?? mpRes.max) : 0
+                    current: evalNum(mpRes?.max),
+                    max: evalNum(mpRes?.max),
+                    initial: evalNum(mpRes?.initial ?? mpRes?.max)
                 },
                 initiative: initiative,
                 resources: otherResources
@@ -278,7 +269,7 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
                 id: crypto.randomUUID(),
                 type: 'REMOVE_PARTICIPANT',
                 timestamp: Date.now(),
-                participant: { ...participant }, // Pass full object or just ID if type allows, but log expects object
+                participant: { ...participant },
                 description: `Removed ${participant.name}`
             });
         }
@@ -301,7 +292,8 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
             if (p.state.initiative !== 0 || p.state.nextAction || p.state.pendingAction) {
                 handleLog({
                     id: crypto.randomUUID(),
-                    type: 'UPDATE_PARTICIPANT',
+                    type: 'UPDATE_PARTICIPANT', // Assumes Log handles this as partial update, but SessionLog usually requires FULL participant or proper logic.
+                    // The log construction here passes full participant with modified state.
                     timestamp: Date.now(),
                     participant: {
                         ...p,
@@ -319,15 +311,12 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
     };
 
     const handleNextRound = async () => {
-        // 1. Identify linked participants
         const linkedIds = participants
             .filter(p => p.type === 'linked' && p.characterId)
             .map(p => p.characterId!);
 
-        // 2. Fetch stats
         const statsMap = await getCharactersStats(linkedIds);
 
-        // 3. Update each participant
         participants.forEach(p => {
             let actionSpeed = 0;
             if (p.type === 'linked' && p.characterId) {
@@ -336,9 +325,7 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
                     actionSpeed = charState.derivedStats['ActionSpeed'] ?? charState.stats['ActionSpeed'] ?? 0;
                 }
             }
-            // For extras, we assume 0 Action Speed for now
 
-            // Roll 2d6
             const rollResult = DiceRoller.roll('2d6', { stats: {}, derivedStats: {} });
             const roll = rollResult.isSuccess ? rollResult.value.total : 0;
             const added = actionSpeed + roll;
@@ -357,7 +344,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
         });
     };
 
-    // Hydrate logs from Supabase if Liveblocks is empty (Initial load / Room revival)
     useEffect(() => {
         const initLogs = async () => {
             if (logsArray.length === 0) {
@@ -383,7 +369,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
 
     return (
         <div className="relative w-full h-full overflow-hidden bg-muted/20">
-            {/* Layer 1: Full Screen Map */}
             <div className="absolute inset-0 z-0">
                 <MapPanel
                     backgroundImageUrl={mapState.backgroundUrl}
@@ -397,27 +382,8 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
                     onSelectToken={setSelectedTokenId}
                 />
             </div>
-
-            {/* Layer 2: UI Overlays (Pointer events handled by children) */}
             <div className="absolute inset-0 z-10 pointer-events-none p-4 flex justify-between items-start">
-
-                {/* Left: Roster & Debug Info */}
                 <div className="flex flex-col gap-4 h-full pointer-events-auto w-64">
-                    <div className="bg-background/80 backdrop-blur-md p-3 rounded-lg border shadow-lg hidden">
-                        {/* Debug Info Hidden for now */}
-                        <h3 className="font-bold text-xs uppercase tracking-wider text-muted-foreground mb-1">Debug Info</h3>
-                        <div className="flex gap-4 text-sm font-mono">
-                            <div className="flex flex-col">
-                                <span className="text-[10px] text-muted-foreground">HP</span>
-                                <span className="font-bold text-green-600">{resourceValues['hp']} <span className="text-muted-foreground/50">/ 20</span></span>
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="text-[10px] text-muted-foreground">MP</span>
-                                <span className="font-bold text-blue-600">{resourceValues['mp']} <span className="text-muted-foreground/50">/ 10</span></span>
-                            </div>
-                        </div>
-                    </div>
-
                     <div className="flex-1 min-h-0">
                         <RosterPanel
                             participants={participants}
@@ -430,8 +396,6 @@ export function SessionRoomContent({ roomId }: { roomId: string }) {
                         />
                     </div>
                 </div>
-
-                {/* Right: Chat & Dice */}
                 <div className="h-full pointer-events-auto w-80 lg:w-96">
                     <div className="h-full bg-background/50 rounded-xl border shadow-sm backdrop-blur-sm overflow-hidden">
                         <DicePanel

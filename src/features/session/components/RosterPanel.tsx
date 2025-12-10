@@ -55,7 +55,7 @@ export function RosterPanel({ participants, onAddExtra, onAddLinked, onRemove, o
             };
             fetchCharacters();
         }
-    }, [isImportOpen, availableCharacters.length]);
+    }, [isImportOpen, availableCharacters.length, repo]);
 
     const filteredCharacters = availableCharacters.filter(c =>
         c.name.toLowerCase().includes(searchTerm.toLowerCase())

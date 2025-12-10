@@ -1,10 +1,10 @@
-import { Resource } from '../CharacterLog';
+import { Resource } from '../Resource';
 import { JAPANESE_TO_ENGLISH_STATS } from '../constants';
 
 export interface ParsedEffect {
     statModifiers: Record<string, number>;
     dynamicModifiers: Record<string, string>;
-    grantedStats: { key: string; label: string; value: number; isMain?: boolean }[];
+    grantedStats: { key: string; label: string; value: string; isMain?: boolean }[];
     grantedResources: Resource[];
 }
 
@@ -12,7 +12,7 @@ export class EffectParser {
     static parse(effect: string): ParsedEffect {
         const statModifiers: Record<string, number> = {};
         const dynamicModifiers: Record<string, string> = {};
-        const grantedStats: { key: string; label: string; value: number; isMain?: boolean }[] = [];
+        const grantedStats: { key: string; label: string; value: string; isMain?: boolean }[] = [];
         const grantedResources: Resource[] = [];
 
         // Split by comma or space, but respect parentheses and braces.
@@ -38,7 +38,12 @@ export class EffectParser {
                 grantedStats.push({
                     key: rawKey,
                     label: rawLabel || rawKey,
-                    value: val,
+                    value: String(val), // grantedStats.value used to be number, but if schema changed to formula?
+                    // Wait, EffectParser seems to be for legacy string effects conversion?
+                    // If ParsedEffect defines value as number, I leave it unless schema requires string.
+                    // The error in test was about Resource. 
+                    // Let's check ParsedEffect interface.
+                    // "value: number" (Line 7).
                     isMain: true
                 });
                 continue;
@@ -53,25 +58,25 @@ export class EffectParser {
                 const simpleValue = grantResourceMatch[2];
                 const complexValue = grantResourceMatch[3];
 
-                let max = 0;
-                let min = 0;
-                let initial = 0;
+                let max = '0';
+                let min = '0';
+                let initial = '0';
 
                 if (complexValue) {
                     // Parse key:value pairs inside {}
                     // e.g. max:10,min:0,init:10
                     const props = complexValue.split(',').reduce((acc, pair) => {
                         const [k, v] = pair.split(/[:=]/).map(s => s.trim().toLowerCase());
-                        if (k && v) acc[k] = parseInt(v) || 0;
+                        if (k && v) acc[k] = v; // Keep as string
                         return acc;
-                    }, {} as Record<string, number>);
+                    }, {} as Record<string, string>);
 
-                    max = props['max'] || 0;
-                    min = props['min'] || 0;
-                    initial = props['init'] !== undefined ? props['init'] : max; // Default init to max if not specified
+                    max = props['max'] || '0';
+                    min = props['min'] || '0';
+                    initial = props['init'] !== undefined ? props['init'] : max;
                 } else if (simpleValue) {
                     // Legacy: =10
-                    max = parseInt(simpleValue) || 0;
+                    max = simpleValue;
                     initial = max;
                 }
 
@@ -81,6 +86,7 @@ export class EffectParser {
                     max: max,
                     min: min,
                     initial: initial,
+                    resetMode: 'initial',
                 });
                 continue;
             }
@@ -105,11 +111,6 @@ export class EffectParser {
                 const formula = dynamicMatch[2].trim();
                 const statKey = JAPANESE_TO_ENGLISH_STATS[rawStat] || rawStat;
                 if (statKey) {
-                    // We no longer manually replace Japanese keys here.
-                    // The formula should use {Variable} syntax, and CharacterCalculator.evaluateFormula will handle it.
-                    // However, for backward compatibility or ease of use, we might want to support legacy "Attack" without {}?
-                    // But the user agreed to standardize on {}.
-                    // So we just pass the formula as is.
                     dynamicModifiers[statKey] = formula;
                 }
             }

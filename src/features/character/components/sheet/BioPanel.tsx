@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 
 interface BioPanelProps {
     bio?: string;
-    tags: Set<string>;
+    tags: string[];
     isEditMode: boolean;
     onUpdateBio: (bio: string) => void;
     onAddTag: (tag: string) => void;
@@ -76,7 +76,7 @@ export const BioPanel: React.FC<BioPanelProps> = ({
                 </CardHeader>
                 <CardContent>
                     <div className="flex flex-wrap gap-2 mb-4">
-                        {Array.from(tags).map(tag => ( // Changed from tags.map to Array.from(tags).map to match original type
+                        {tags.map(tag => ( // Changed from tags.map to Array.from(tags).map to match original type
                             <Badge key={tag} variant="secondary" className="flex items-center gap-1">
                                 {tag}
                                 {isEditMode && (
@@ -87,7 +87,7 @@ export const BioPanel: React.FC<BioPanelProps> = ({
                                 )}
                             </Badge>
                         ))}
-                        {tags.size === 0 && !isEditMode && ( // Added back condition for no tags
+                        {tags.length === 0 && !isEditMode && ( // Added back condition for no tags
                             <span className="text-muted-foreground text-sm">タグはありません。</span>
                         )}
                     </div>

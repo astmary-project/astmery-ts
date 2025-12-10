@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dices } from 'lucide-react';
 import React from 'react';
 import { CharacterCalculator } from '../../domain/CharacterCalculator';
-import { CharacterState } from '../../domain/CharacterLog';
+import { CharacterState } from '../../domain/models';
+
 import { ABILITY_STATS, STANDARD_STAT_ORDER, STAT_LABELS } from '../../domain/constants';
 import { GrowthDialog } from './GrowthDialog';
 
@@ -70,12 +71,8 @@ export const StatsPanel = ({ state, displayState, onRoll, isEditMode = false, on
         setGrowthTarget({ key, label, value });
     };
 
-
-
     return (
         <div className="space-y-6">
-
-
             {/* Main Stats */}
             <Card>
                 <CardHeader className="pb-2">
@@ -89,12 +86,38 @@ export const StatsPanel = ({ state, displayState, onRoll, isEditMode = false, on
 
                             // Calculate Base and Mod for Main Stats
                             let mod = 0;
-                            state.equipment.forEach(item => {
-                                if (item.statModifiers && item.statModifiers[key]) mod += item.statModifiers[key];
+
+                            // Equipment Modifiers
+                            // Use equipmentSlots (equipped items)
+                            state.equipmentSlots.forEach(item => {
+                                // Default to 'default' variant if currentVariant not set
+                                const variantKey = item.currentVariant || 'default';
+                                const variant = item.variants?.[variantKey] || item.variants?.['default'];
+
+                                if (variant && variant.modifiers && variant.modifiers[key]) {
+                                    // Evaluate formula
+                                    const value = CharacterCalculator.evaluateFormula(variant.modifiers[key], state);
+                                    if (typeof value === 'number') {
+                                        mod += value;
+                                    }
+                                }
                             });
+
+                            // Skill Modifiers
                             state.skills.forEach(skill => {
-                                if (skill.statModifiers && skill.statModifiers[key]) mod += skill.statModifiers[key];
+                                if (skill.category === 'PASSIVE') {
+                                    const variantKey = skill.currentVariant || 'default';
+                                    const variant = skill.variants?.[variantKey] || skill.variants?.['default'];
+
+                                    if (variant && variant.modifiers && variant.modifiers[key]) {
+                                        const value = CharacterCalculator.evaluateFormula(variant.modifiers[key], state);
+                                        if (typeof value === 'number') {
+                                            mod += value;
+                                        }
+                                    }
+                                }
                             });
+
                             const base = total - mod;
 
                             return (

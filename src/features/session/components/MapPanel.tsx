@@ -108,7 +108,7 @@ export function MapPanel({
         const x = (e.clientX - containerRect.left - panOffset.x) / scale - dragOffset.x;
         const y = (e.clientY - containerRect.top - panOffset.y) / scale - dragOffset.y;
         setPreviewPosition({ x, y });
-    }, [isDraggingPanel, isDraggingToken, isPanning, panOffset.x, panOffset.y, panStart.x, panStart.y, scale, selectedPanelId, selectedTokenId]);
+    }, [dragOffset.x, dragOffset.y, isDraggingPanel, isDraggingToken, isPanning, panOffset.x, panOffset.y, panStart.x, panStart.y, scale, selectedPanelId, selectedTokenId]);
 
     const handleMouseUp = useCallback((e: React.MouseEvent) => {
         if (isPanning) {
@@ -334,7 +334,7 @@ export function MapPanel({
         const x = isSelected && previewPosition ? previewPosition.x / GRID_SIZE : panel.x;
         const y = isSelected && previewPosition ? previewPosition.y / GRID_SIZE : panel.y;
         const isOwner = panel.ownerId === currentUserId;
-        let isVisible = panel.visibility !== 'none' || isOwner;
+        const isVisible = panel.visibility !== 'none' || isOwner;
         const showBack = (panel.visibility === 'owner' && !isOwner) || (panel.visibility === 'others' && isOwner);
 
         if (!isVisible) return null;
@@ -482,7 +482,7 @@ export function MapPanel({
                                 <TabsContent value="settings" className="space-y-4 py-4">
                                     <div className="grid gap-2">
                                         <Label>Visibility Mode</Label>
-                                        <Select value={editingPanel.visibility} onValueChange={(val: string) => setEditingPanel({ ...editingPanel, visibility: val as any })}>
+                                        <Select value={editingPanel.visibility} onValueChange={(val: string) => setEditingPanel({ ...editingPanel, visibility: val as ScreenPanel['visibility'] })}>
                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="all">Everyone (All)</SelectItem>

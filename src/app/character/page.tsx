@@ -39,7 +39,7 @@ export default function CharacterListPage() {
             }
         };
         fetchCharacters();
-    }, []);
+    }, [repository]);
 
     const handleCreateNew = async () => {
         // Get current user
@@ -50,7 +50,7 @@ export default function CharacterListPage() {
         const newCharacter = {
             id: newId,
             name: '新規キャラクター',
-            logs: [],
+            events: [],
             profile: {},
             userId: user?.id // Set userId if logged in
         };

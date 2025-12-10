@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -6,10 +7,11 @@ import { ImageUpload } from '@/components/ui/image-upload';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Item, Skill } from '@/features/character';
 import { EquipmentListEditor } from '@/features/character/components/setup/EquipmentListEditor';
 import { SkillListEditor } from '@/features/character/components/setup/SkillListEditor';
 import { SpecialtyElementEditor } from '@/features/character/components/setup/SpecialtyElementEditor';
-import { Item, Skill } from '@/features/character/domain/CharacterLog';
+import { ActiveSkillEntity } from '@/features/character/domain/Skill';
 import { ABILITY_STATS, JAPANESE_TO_ENGLISH_STATS, STAT_LABELS } from '@/features/character/domain/constants';
 import { CharacterSetupService, ItemInput, SkillInput, SpecialtyElementInput } from '@/features/character/domain/service/CharacterSetupService';
 import { useCharacterSheet } from '@/features/character/hooks/useCharacterSheet';
@@ -21,18 +23,29 @@ import { useEffect, useRef, useState } from 'react';
 const calculateBaseStats = (stats: Record<string, number>, equipment: Item[], skills: Skill[]) => {
     const baseStats = { ...stats };
 
-    const subtractMods = (mods?: Record<string, number>) => {
+    const subtractMods = (mods?: Record<string, number | string>) => {
         if (!mods) return;
         Object.entries(mods).forEach(([key, value]) => {
             const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-            if (typeof baseStats[normalizedKey] === 'number') {
-                baseStats[normalizedKey] -= value;
+            const numVal = typeof value === 'string' ? parseInt(value) : value; // Handle string formulas roughly (simple integers)
+            if (typeof baseStats[normalizedKey] === 'number' && !isNaN(numVal)) {
+                baseStats[normalizedKey] -= numVal;
             }
         });
     };
 
-    equipment.forEach(item => subtractMods(item.statModifiers));
-    skills.forEach(skill => subtractMods(skill.statModifiers));
+    equipment.forEach(item => {
+        if (item.category === 'EQUIPMENT') {
+            const variant = item.variants['default'];
+            subtractMods(variant?.modifiers);
+        }
+    });
+    skills.forEach(skill => {
+        if (skill.category === 'PASSIVE') {
+            const variant = skill.variants['default'];
+            subtractMods(variant?.modifiers);
+        }
+    });
 
     return baseStats;
 };
@@ -41,7 +54,7 @@ export default function CharacterSetupPage() {
     const params = useParams();
     const router = useRouter();
     const characterId = params.id as string;
-    const { name, character, state, logs, isLoading, updateCharacter } = useCharacterSheet(characterId);
+    const { name, character, state, events, isLoading, updateCharacter } = useCharacterSheet(characterId);
 
     // Local form state
     const [formData, setFormData] = useState({
@@ -65,7 +78,17 @@ export default function CharacterSetupPage() {
         if (!isLoading && !isInitialized) {
             // Defer update to avoid set-state-in-effect
             const timer = setTimeout(() => {
-                const baseStats = calculateBaseStats(state.stats, state.equipment, state.skills);
+                const currentInventory = state.inventory || [];
+                // Filter only equipment for the setup page (InventoryItem union)
+                const currentEquipment = currentInventory.filter(i => i.category === 'EQUIPMENT') as Item[]; // Item is alias for InventoryItem, narrowing happens here? No, Item is InventoryItem. We need to filter and cast if needed or just filter.
+                // Wait, Item imported is InventoryItem.
+                // state.inventory is InventoryItem[].
+                // We want only 'EQUIPMENT' ones for the "Equipment" section list?
+                // Or does it include Consumables?
+                // The form uses ItemInput which has type: 'Weapon' | 'Armor' ...
+                // EquipmentItem has these slots.
+
+                const baseStats = calculateBaseStats(state.stats, currentEquipment, state.skills);
                 setFormData({
                     name: name,
                     bio: character?.bio || '',
@@ -88,43 +111,53 @@ export default function CharacterSetupPage() {
 
                 // Load Skills
                 initialSkillsRef.current = state.skills;
-                setSkills(state.skills.map(s => ({
-                    id: s.id,
-                    name: s.name,
-                    type: s.type,
-                    acquisitionType: s.acquisitionType,
-                    summary: s.description,
-                    effect: s.effect || '', // No fallback
-                    restriction: s.restriction || '',
-                    timing: s.timing || '',
-                    cooldown: s.cooldown || '',
-                    target: s.target || '',
-                    range: s.range || '',
-                    cost: s.cost || '',
-                    rollModifier: s.rollModifier || '',
-                    magicGrade: s.magicGrade || '',
-                    shape: s.shape || '',
-                    duration: s.duration || '',
-                    activeCheck: s.activeCheck || '',
-                    passiveCheck: s.passiveCheck || '',
-                    chatPalette: s.chatPalette || '',
-                })));
+                setSkills(state.skills.map(s => {
+                    const isActive = s.category === 'ACTIVE';
+                    const activeSkill = isActive ? (s as ActiveSkillEntity) : undefined;
+                    const variant = s.variants['default'] as any; // Cast to any to access union properties safely
+
+                    return {
+                        id: s.id,
+                        name: s.name,
+                        type: isActive ? activeSkill?.subType || 'Active' : 'Passive',
+                        acquisitionType: s.acquisitionMethod as 'Free' | 'Standard' | 'Grade' | undefined,
+                        summary: s.description,
+                        effect: variant?.effect || '',
+                        restriction: variant?.restriction || '',
+                        timing: variant?.timing || '',
+                        cooldown: variant?.chargeTime || '',
+                        target: variant?.target || '',
+                        range: variant?.range || '',
+                        cost: variant?.cost || '',
+                        rollModifier: variant?.rollFormula || '',
+                        magicGrade: variant?.spellGrade || '',
+                        shape: variant?.shape || '',
+                        duration: variant?.duration || '',
+                        activeCheck: variant?.activeCheck || '',
+                        passiveCheck: variant?.passiveCheck || '',
+                        chatPalette: variant?.chatPalette || '',
+                    };
+                }));
 
                 // Load Equipment
-                initialEquipmentRef.current = state.equipment;
-                setEquipment(state.equipment.map(i => ({
-                    id: i.id,
-                    name: i.name,
-                    type: i.type as 'Weapon' | 'Armor' | 'Accessory' | 'Other',
-                    summary: i.description,
-                    effect: i.effect || '',
-                })));
+                const setupEquipment = state.inventory.filter(i => i.category === 'EQUIPMENT');
+                initialEquipmentRef.current = setupEquipment;
+                setEquipment(setupEquipment.map(i => {
+                    const variant = i.variants['default'] as any;
+                    return {
+                        id: i.id,
+                        name: i.name,
+                        type: i.category === 'EQUIPMENT' ? (i.slot as any) : 'Other',
+                        summary: i.description,
+                        effect: variant?.effect || '',
+                    };
+                }));
 
                 setIsInitialized(true);
             }, 0);
             return () => clearTimeout(timer);
         }
-    }, [isLoading, isInitialized, name, character, state.stats, state.skills, state.equipment]);
+    }, [isLoading, isInitialized, name, character, state.stats, state.skills, state.inventory]);
 
     const handleStatChange = (key: string, value: string) => {
         const numValue = parseInt(value) || 0;
@@ -140,9 +173,11 @@ export default function CharacterSetupPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const currentBaseStats = calculateBaseStats(state.stats, state.equipment, state.skills);
+        const currentInventory = state.inventory || [];
+        const currentEquipment = currentInventory.filter(i => i.category === 'EQUIPMENT');
+        const currentBaseStats = calculateBaseStats(state.stats, currentEquipment, state.skills);
 
-        const logsToAdd = CharacterSetupService.calculateDiffLogs({
+        const eventsToAdd = CharacterSetupService.calculateDiffEvents({
             currentStats: currentBaseStats,
             currentSkills: initialSkillsRef.current,
             currentEquipment: initialEquipmentRef.current,
@@ -164,7 +199,7 @@ export default function CharacterSetupPage() {
             newResources: [], // Removed
         });
 
-        const finalLogs = [...logs, ...logsToAdd];
+        const finalEvents = [...events, ...eventsToAdd];
 
         // Format specialty elements
         const formattedElements = specialtyElements
@@ -184,7 +219,7 @@ export default function CharacterSetupPage() {
                 avatarUrl: formData.avatarUrl,
                 specialtyElements: formattedElements,
             },
-            logs: finalLogs,
+            events: finalEvents,
         });
 
         // Redirect to sheet

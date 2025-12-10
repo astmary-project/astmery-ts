@@ -1,21 +1,22 @@
 import { supabase } from '@/lib/supabase';
 import { useEffect, useMemo, useState } from 'react';
 import { CharacterCalculator } from '../domain/CharacterCalculator';
-import { CharacterLogEntry, CharacterState } from '../domain/CharacterLog';
+import { CharacterEvent } from '../domain/Event';
+import { CharacterState } from '../domain/models';
 import { ICharacterRepository } from '../domain/repository/ICharacterRepository';
 import { SupabaseCharacterRepository } from '../infrastructure/SupabaseCharacterRepository';
 
 const repository: ICharacterRepository = new SupabaseCharacterRepository(supabase);
 
 export const useCharacterData = (characterId: string | undefined) => {
-    const [logs, setLogs] = useState<CharacterLogEntry[]>([]);
+    const [events, setEvents] = useState<CharacterEvent[]>([]);
     const [profileTags, setProfileTags] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!characterId) {
-            setLogs([]);
+            setEvents([]);
             setProfileTags([]);
             return;
         }
@@ -25,7 +26,7 @@ export const useCharacterData = (characterId: string | undefined) => {
             try {
                 const result = await repository.load(characterId);
                 if (result.isSuccess) {
-                    setLogs(result.value.logs);
+                    setEvents(result.value.events);
                     setProfileTags(result.value.profile?.tags || []);
                 } else {
                     console.error(result.error);
@@ -42,12 +43,13 @@ export const useCharacterData = (characterId: string | undefined) => {
     }, [characterId]);
 
     const state: CharacterState = useMemo(() => {
-        if (!logs.length && !profileTags.length) return {
+        if (!events.length && !profileTags.length) return {
             stats: {},
             resources: [],
             skills: [],
-            tags: new Set(),
-            equipment: [],
+            tags: [],
+            inventory: [],
+            equipmentSlots: [],
             skillWishlist: [],
             exp: { total: 0, used: 0, free: 0 },
             derivedStats: {},
@@ -55,8 +57,8 @@ export const useCharacterData = (characterId: string | undefined) => {
             customMainStats: [],
             resourceValues: {},
         };
-        return CharacterCalculator.calculateState(logs, {}, {}, profileTags);
-    }, [logs, profileTags]);
+        return CharacterCalculator.calculateState(events, {}, {}, profileTags);
+    }, [events, profileTags]);
 
     return { state, isLoading, error, refetch: () => { /* Implement if needed, or trigger reload via key */ } };
 };

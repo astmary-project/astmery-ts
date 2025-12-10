@@ -1,5 +1,10 @@
 // Domain Types
-export type { CharacterLogEntry, CharacterState, Item, Resource, Skill } from './domain/CharacterLog';
+export type { InventoryItem as Item } from './domain/Item';
+export type { CharacterState } from './domain/models';
+export type { Resource } from './domain/Resource';
+export type { SkillEntity as Skill } from './domain/Skill';
+// CharacterLogEntry is deprecated/replaced by CharacterEvent. But maybe alias it for compatibility?
+export type { CharacterEvent, CharacterEvent as CharacterLogEntry } from './domain/Event';
 
 // Domain Logic
 export { CharacterCalculator } from './domain/CharacterCalculator';

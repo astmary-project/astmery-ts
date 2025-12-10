@@ -1,6 +1,8 @@
 import { all, create } from 'mathjs';
-import { CharacterLogEntry, CharacterState } from './CharacterLog';
 import { JAPANESE_TO_ENGLISH_STATS } from './constants';
+import { CharacterEvent } from './Event';
+import { CharacterState } from './models';
+import { ActiveSkillEntity, PassiveSkillEntity } from './Skill';
 
 // Configure mathjs
 const math = create(all, {
@@ -11,8 +13,9 @@ const math = create(all, {
 export class CharacterCalculator {
     private static readonly DEFAULT_STATE: CharacterState = {
         stats: {},
-        tags: new Set(),
-        equipment: [],
+        tags: [],
+        inventory: [],     // New: Inventory items (Consumables, Unequipped/Equipped Items)
+        equipmentSlots: [], // New: Equipped items (References or copies)
         skills: [],
         skillWishlist: [],
         exp: { total: 0, used: 0, free: 0 },
@@ -29,360 +32,281 @@ export class CharacterCalculator {
         'Defense': '{Body}',
         'MagicDefense': '{Spirit}',
         'ActionSpeed': '{Grade} + 3',
-        'DamageDice': 'ceil({Grade} / 5)', // New: Damage Dice Count
+        'DamageDice': 'ceil({Grade} / 5)',
     };
 
     /**
-     * Aggregates a list of logs into a final CharacterState.
+     * Calculates the full character state from a list of events.
      */
-    public static calculateState(
-        logs: CharacterLogEntry[],
+    static calculateState(
+        events: CharacterEvent[],
         baseStats: Record<string, number> = {},
         sessionContext: CharacterCalculator.SessionContext = {},
         initialTags: string[] = []
     ): CharacterState {
-        const state: CharacterState = {
-            ...this.DEFAULT_STATE,
-            stats: { ...baseStats },
-            tags: new Set(initialTags),
-            equipment: [],
-            skills: [],
-            skillWishlist: [],
-            exp: { total: 0, used: 0, free: 0 },
-            derivedStats: {},
-            customLabels: {},
-            customMainStats: [],
-            resources: [],
-            resourceValues: {},
-        };
+        // Start with default state
+        const state: CharacterState = JSON.parse(JSON.stringify(this.DEFAULT_STATE));
 
-        // Sort logs by timestamp just in case
-        const sortedLogs = [...logs].sort((a, b) => a.timestamp - b.timestamp);
+        // Initialize stats with base stats
+        state.stats = { ...baseStats };
+        state.tags = [...initialTags];
 
-        for (const log of sortedLogs) {
-            this.applyLog(state, log);
+        // Apply all events
+        for (const event of events) {
+            this.applyEvent(state, event);
         }
 
-        // Apply Session Context (Temporary Additions)
-        // 1. Temporary Stats
-        if (sessionContext.tempStats) {
-            for (const [key, value] of Object.entries(sessionContext.tempStats)) {
-                const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-                state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + (value as number);
+        // Apply Session Context (Temporary)
+        if (sessionContext) {
+            if (sessionContext.tempStats) {
+                for (const [k, v] of Object.entries(sessionContext.tempStats)) {
+                    const normK = JAPANESE_TO_ENGLISH_STATS[k] || k;
+                    state.stats[normK] = (state.stats[normK] || 0) + (v as number);
+                }
             }
-        }
-        // 2. Temporary Skills
-        if (sessionContext.tempSkills) {
-            state.skills.push(...sessionContext.tempSkills);
-        }
-        // 3. Temporary Items
-        if (sessionContext.tempItems) {
-            state.equipment.push(...sessionContext.tempItems);
+            if (sessionContext.tempSkills) state.skills.push(...sessionContext.tempSkills);
+            if (sessionContext.tempEquipment) state.equipmentSlots.push(...sessionContext.tempEquipment);
         }
 
-        // Prepare Formulas (Start with defaults)
-        const formulas = this.getFormulas(state);
+        // Apply Dynamic Modifiers (Equipment, Skills, etc.) 
+        // This runs AFTER all logs are applied into "state".
+        this.applyDynamicBonuses(state);
 
-        // Apply Equipment Modifiers and Overrides (already handled in getFormulas for overrides)
-        // Here we handle direct modifiers
-        for (const item of state.equipment) {
-            if (item.statModifiers) {
-                for (const [key, value] of Object.entries(item.statModifiers)) {
+        return state;
+    }
+
+    /**
+     * Internal method to apply all dynamic bonuses, derived stats, and resource defaults.
+     * Mutates state.
+     */
+    private static applyDynamicBonuses(state: CharacterState) {
+        // 1. Equipment Modifiers
+        for (const item of state.equipmentSlots) {
+            const variant = item.variants[item.currentVariant || 'default'];
+            if (variant && variant.modifiers) {
+                for (const [key, formula] of Object.entries(variant.modifiers)) {
                     const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                    const value = this.evaluateFormula(formula, state);
+                    // Add to stats (Base Stats modifier)
                     state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + value;
                 }
             }
-            // Granted Stats/Resources
-            if (item.grantedStats) {
-                for (const stat of item.grantedStats) {
-                    state.customLabels[stat.key] = stat.label;
-                    if (stat.isMain) {
-                        if (!state.customMainStats.includes(stat.key)) {
-                            state.customMainStats.push(stat.key);
-                        }
-                    }
-                    state.stats[stat.key] = (state.stats[stat.key] || 0) + stat.value;
-                }
-            }
-            if (item.grantedResources) {
-                for (const res of item.grantedResources) {
-                    // Check duplicates by ID
-                    if (!state.resources.find(r => r.id === res.id)) {
-                        state.resources.push(res);
-                    }
+
+            // Passive Skills on Equipment
+            if (item.passiveSkills) {
+                for (const pSkill of item.passiveSkills) {
+                    this.applySkillEffects(state, pSkill);
                 }
             }
         }
 
-        // Apply Skill Modifiers and Overrides
+        // 2. Skill Modifiers
         for (const skill of state.skills) {
-            if (skill.statModifiers) {
-                for (const [key, value] of Object.entries(skill.statModifiers)) {
-                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-                    state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + value;
-                }
-            }
-            // Granted Stats/Resources
-            if (skill.grantedStats) {
-                for (const stat of skill.grantedStats) {
-                    state.customLabels[stat.key] = stat.label;
-                    if (stat.isMain) {
-                        if (!state.customMainStats.includes(stat.key)) {
-                            state.customMainStats.push(stat.key);
-                        }
-                    }
-                    state.stats[stat.key] = (state.stats[stat.key] || 0) + stat.value;
-                }
-            }
-            if (skill.grantedResources) {
-                for (const res of skill.grantedResources) {
-                    if (!state.resources.find(r => r.id === res.id)) {
-                        state.resources.push(res);
-                    }
-                }
-            }
+            this.applySkillEffects(state, skill);
         }
 
-        // Apply Dynamic Modifiers (Calculated last so they can use static mods)
-        const dynamicBonuses = this.calculateDynamicBonuses(state);
-        for (const [key, bonus] of Object.entries(dynamicBonuses)) {
-            state.stats[key] = (state.stats[key] || 0) + bonus;
-        }
-
-        // Calculate Derived Stats
+        // 3. Derived Stats
+        const formulas = this.getFormulas(state);
         this.calculateDerivedStats(state, formulas);
 
+        // 4. Ensure Resources
         // Ensure HP and MP are in resources with dynamic Max
         const ensureResource = (key: string, name: string, statKey: string) => {
             // Use derived stat for Max
-            const max = state.derivedStats[statKey] || 0;
+            const max = String(state.derivedStats[statKey] || 0);
 
             const existing = state.resources.find(r => r.id === key);
             if (existing) {
                 // Update existing resource max
                 existing.max = max;
-                existing.initial = max; // Usually initial is max for HP/MP
+                existing.initial = max;
             } else {
                 // Create new resource
                 state.resources.push({
                     id: key,
                     name: name,
                     max: max,
-                    min: 0,
+                    min: '0',
                     initial: max,
+                    resetMode: 'initial'
                 });
             }
         };
+        // Determine what stat to use for HP/MP. Default logic assumes 'MaxHP'/'MaxMP' derived stats exist.
         ensureResource('HP', 'HP', 'MaxHP');
         ensureResource('MP', 'MP', 'MaxMP');
 
-        // Calculate free exp
+        // 5. Calculate free exp
         state.exp.free = state.exp.total - state.exp.used;
-
-        return state;
     }
 
-    private static applyLog(state: CharacterState, log: CharacterLogEntry) {
-        switch (log.type) {
-            case 'GROW_STAT':
-                if (log.statGrowth) {
-                    const { key, value } = log.statGrowth;
-                    const trimmedKey = key.trim();
-                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
+    private static applySkillEffects(state: CharacterState, skill: ActiveSkillEntity | PassiveSkillEntity) {
+        // 1. Passive Modifiers (Only Passive Skills have 'modifiers' in variants)
+        if (skill.category === 'PASSIVE') {
+            const passive = skill as PassiveSkillEntity;
+            const variant = passive.variants[passive.currentVariant || 'default'];
+            if (variant && variant.modifiers) {
+                for (const [key, formula] of Object.entries(variant.modifiers)) {
+                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                    const value = this.evaluateFormula(formula, state);
                     state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + value;
-                    // Add cost if present (new format) or from statGrowth (migrated/intermediate)
-                    if (log.cost) state.exp.used += log.cost;
-                    else if (log.statGrowth.cost) state.exp.used += log.statGrowth.cost;
-                } else if (log.statKey && log.value !== undefined) {
-                    // Fallback for legacy format if any
-                    const trimmedKey = log.statKey.trim();
-                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
-                    state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + log.value;
-                    // Legacy logs might not have cost here, relied on SPEND_EXP
                 }
-                break;
-            case 'GROWTH': // Legacy support
-                if (log.statKey && log.value !== undefined) {
-                    const trimmedKey = log.statKey.trim();
-                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
-                    state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + log.value;
+            }
+        }
+
+        // 2. Granted Stats (Common to all skills)
+        if (skill.grantedStats) {
+            for (const stat of skill.grantedStats) {
+                state.customLabels[stat.key] = stat.label;
+                if (stat.isMain) {
+                    if (!state.customMainStats.includes(stat.key)) state.customMainStats.push(stat.key);
                 }
-                break;
-            case 'SET_VALUE':
-                if (log.statKey && log.value !== undefined) {
-                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[log.statKey] || log.statKey;
-                    state.stats[normalizedKey] = log.value;
+                const val = this.evaluateFormula(stat.value, state);
+                state.stats[stat.key] = (state.stats[stat.key] || 0) + val;
+            }
+        }
+
+        // 3. Granted Resources (Common to all skills)
+        if (skill.grantedResources) {
+            for (const res of skill.grantedResources) {
+                if (!state.resources.find(r => r.id === res.id)) {
+                    state.resources.push(res);
                 }
-                break;
-            case 'ADD_TAG':
-                // Deprecated: Tags are now managed via profile.tags
-                // if (log.tagId) state.tags.add(log.tagId);
-                break;
-            case 'REMOVE_TAG':
-                // Deprecated: Tags are now managed via profile.tags
-                // if (log.tagId) state.tags.delete(log.tagId);
-                break;
-            case 'EQUIP':
-                if (log.item) {
-                    state.equipment.push(log.item);
-                }
-                break;
-            case 'UNEQUIP':
-                if (log.item?.id) {
-                    state.equipment = state.equipment.filter(i => i.id !== log.item!.id);
-                }
-                break;
-            case 'UPDATE_ITEM':
-                if (log.item?.id) {
-                    const index = state.equipment.findIndex(i => i.id === log.item!.id);
-                    if (index !== -1) {
-                        state.equipment[index] = { ...state.equipment[index], ...log.item };
-                    }
-                }
-                break;
-            case 'LEARN_SKILL':
-                if (log.skill) {
-                    state.skills.push(log.skill);
-                    if (log.cost) state.exp.used += log.cost;
-                }
-                break;
-            case 'FORGET_SKILL':
-                if (log.skill?.id) {
-                    state.skills = state.skills.filter(s => s.id !== log.skill!.id);
-                    // Note: We don't refund cost automatically here unless we track it specifically.
-                    // If we wanted to refund, we'd need to know the original cost.
-                    // For now, manual SPEND_EXP (negative) or specific REFUND log would be needed if refund is desired.
-                }
-                break;
-            case 'UPDATE_SKILL':
-                if (log.skill?.id) {
-                    const index = state.skills.findIndex(s => s.id === log.skill!.id);
-                    if (index !== -1) {
-                        state.skills[index] = { ...state.skills[index], ...log.skill };
-                    }
-                }
-                break;
-            case 'ADD_WISHLIST_SKILL':
-                if (log.skill) {
-                    state.skillWishlist.push(log.skill);
-                }
-                break;
-            case 'REMOVE_WISHLIST_SKILL':
-                if (log.skill?.id) {
-                    state.skillWishlist = state.skillWishlist.filter(s => s.id !== log.skill!.id);
-                }
-                break;
-            case 'UPDATE_WISHLIST_SKILL':
-                if (log.skill?.id) {
-                    const index = state.skillWishlist.findIndex(s => s.id === log.skill!.id);
-                    if (index !== -1) {
-                        state.skillWishlist[index] = { ...state.skillWishlist[index], ...log.skill };
-                    }
-                }
-                break;
-            case 'GAIN_EXP':
-                if (log.value) state.exp.total += log.value;
-                break;
-            case 'SPEND_EXP':
-                if (log.value) state.exp.used += log.value;
-                break;
-            case 'REGISTER_STAT_LABEL':
-                if (log.statKey && log.stringValue) {
-                    state.customLabels[log.statKey] = log.stringValue;
-                    if (log.isMainStat) {
-                        state.customMainStats.push(log.statKey);
-                    }
-                }
-                break;
-            case 'REGISTER_RESOURCE':
-                if (log.resource) {
-                    // Check if resource already exists
-                    const exists = state.resources.some(r => r.id === log.resource!.id);
-                    if (!exists) {
-                        state.resources.push(log.resource);
-                    } else {
-                        // Update existing definition
-                        state.resources = state.resources.map(r =>
-                            r.id === log.resource!.id ? log.resource! : r
-                        );
-                    }
-                }
-                break;
+            }
         }
     }
 
     /**
-     * Normalizes a formula string by:
-     * 1. Replacing known Japanese stat names with English IDs.
-     * 2. Wrapping unknown non-ASCII sequences (custom Japanese vars) in data["..."] syntax.
+     * Applies a single event to the character state.
      */
+    static applyEvent(state: CharacterState, event: CharacterEvent): void {
+        switch (event.type) {
+            case 'STAT_GROWN': {
+                const normalizedKey = JAPANESE_TO_ENGLISH_STATS[event.key] || event.key;
+                state.stats[normalizedKey] = (state.stats[normalizedKey] || 0) + event.delta;
+                if (event.cost) state.exp.used += event.cost;
+                break;
+            }
+            case 'STAT_UPDATED': {
+                const key = JAPANESE_TO_ENGLISH_STATS[event.key] || event.key;
+                const val = this.evaluateFormula(event.value, state);
+                state.stats[key] = val;
+                break;
+            }
+            case 'STAT_LABEL_REGISTERED': {
+                state.customLabels[event.key] = event.label;
+                if (event.isMain) state.customMainStats.push(event.key);
+                break;
+            }
+            case 'RESOURCE_DEFINED': {
+                const existingResIdx = state.resources.findIndex(r => r.id === event.resource.id);
+                if (existingResIdx >= 0) {
+                    state.resources[existingResIdx] = event.resource;
+                } else {
+                    state.resources.push(event.resource);
+                }
+                break;
+            }
+            case 'ITEM_ADDED': {
+                state.inventory.push(event.item);
+                break;
+            }
+            case 'ITEM_REMOVED': {
+                state.inventory = state.inventory.filter(i => i.id !== event.itemId);
+                state.equipmentSlots = state.equipmentSlots.filter(i => i.id !== event.itemId);
+                break;
+            }
+            case 'ITEM_UPDATED': {
+                const idx = state.inventory.findIndex(i => i.id === event.itemId);
+                if (idx >= 0) {
+                    state.inventory[idx] = event.newItemState;
+                    const eqIdx = state.equipmentSlots.findIndex(e => e.id === event.itemId);
+                    if (eqIdx >= 0 && event.newItemState.category === 'EQUIPMENT') {
+                        state.equipmentSlots[eqIdx] = event.newItemState;
+                    }
+                }
+                break;
+            }
+            case 'ITEM_EQUIPPED': {
+                const itemToEquip = state.inventory.find(i => i.id === event.itemId);
+                if (itemToEquip && itemToEquip.category === 'EQUIPMENT') {
+                    const existingEqIdx = state.equipmentSlots.findIndex(e => e.id === event.itemId);
+                    if (existingEqIdx === -1) {
+                        const equippedItem = { ...itemToEquip, slot: event.slot };
+                        state.equipmentSlots.push(equippedItem);
+                    }
+                }
+                break;
+            }
+            case 'ITEM_UNEQUIPPED': {
+                state.equipmentSlots = state.equipmentSlots.filter(i => i.id !== event.itemId);
+                break;
+            }
+            case 'SKILL_LEARNED': {
+                state.skills.push(event.skill);
+                if (event.cost) state.exp.used += event.cost;
+                break;
+            }
+            case 'SKILL_FORGOTTEN': {
+                state.skills = state.skills.filter(s => s.id !== event.skillId);
+                break;
+            }
+            case 'SKILL_UPDATED': {
+                const idx = state.skills.findIndex(s => s.id === event.skillId);
+                if (idx >= 0) {
+                    state.skills[idx] = event.newSkill;
+                }
+                break;
+            }
+            case 'WISHLIST_SKILL_ADDED':
+                if (event.skill) {
+                    state.skillWishlist.push(event.skill);
+                }
+                break;
+            case 'WISHLIST_SKILL_REMOVED': {
+                state.skillWishlist = state.skillWishlist.filter(s => s.id !== event.skillId);
+                break;
+            }
+            case 'EXPERIENCE_GAINED': {
+                state.exp.total += event.amount;
+                break;
+            }
+            case 'EXPERIENCE_SPENT': {
+                state.exp.used += event.amount;
+                break;
+            }
+            case 'LOG_REVOKED':
+                break;
+        }
+    }
+
     public static normalizeFormula(formula: string): string {
         let normalized = formula;
-
-        // 1. Replace known Japanese labels
-        // Sort by length descending to avoid partial matches (though unlikely with these specific names)
         const jpKeys = Object.keys(JAPANESE_TO_ENGLISH_STATS).sort((a, b) => b.length - a.length);
         for (const jp of jpKeys) {
             const en = JAPANESE_TO_ENGLISH_STATS[jp];
-            // Use regex to replace only whole words if possible, but Japanese doesn't have spaces usually.
-            // Simple global replace is likely safe enough for these specific labels.
             normalized = normalized.split(jp).join(en);
         }
-
-        // 2. Wrap remaining non-ASCII sequences in data["..."]
-        // Matches sequences of non-ASCII characters that are NOT inside quotes
-        // This is a simplified approach. A full parser would be better but overkill here.
-        // We assume variables don't start with numbers.
         normalized = normalized.replace(/([^\x00-\x7F]+)/g, (match) => {
-            // If it's already quoted or part of a string, we might have issues,
-            // but for simple math formulas this should be fine.
             return `data["${match}"]`;
         });
-
         return normalized;
     }
 
-    /**
-     * Evaluates a formula string against the character state.
-     * Supports {Variable} syntax for stats.
-     * @param formula The formula string to evaluate.
-     * @param state The character state to use for variable resolution.
-     * @param overrides Optional map of variable names to values to override state values.
-     */
     public static evaluateFormula(formula: string, state: CharacterState, overrides: Record<string, number> = {}): number {
         let processedFormula = formula;
         try {
-            // 1. Process Formula: Replace {Key} with value
-            // We look for {Key} patterns.
-            // Key can be English or Japanese.
-
-            // First, normalize the formula (handles Japanese keys -> English, and wraps custom Japanese in data["..."])
-            // Actually, if we enforce strict {}, we might not need normalizeFormula for the *keys* inside {} if we handle lookup manually.
-            // BUT normalizeFormula handles "standard Japanese aliases" (e.g. 肉体 -> Body).
-            // If user writes {肉体}, we want to look up 'Body'.
-            // Our manual lookup logic below needs to handle that.
-
-            // Let's NOT use normalizeFormula on the whole string because it might replace things we don't want if they are not in {}.
-            // The user wants strictness: "text is text, variables are {variables}".
-
             processedFormula = formula.replace(/\{([^{}]+)\}/g, (match, key) => {
                 const trimmedKey = key.trim();
-
-                // 1. Check overrides
                 if (trimmedKey in overrides) {
                     return overrides[trimmedKey].toString();
                 }
-
-                // 2. Resolve key (handle Japanese aliases)
-                const enKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey;
-
-                // 3. Look up in state
-                const val = state.stats[enKey] ?? state.derivedStats[enKey] ?? 0;
+                const enKey = JAPANESE_TO_ENGLISH_STATS[trimmedKey] || trimmedKey; // Derived stats override base stats if colliding? No, stats usually disjoint.
+                // But generally check derivedStats first or stats?
+                // Standard order: derived, then base.
+                const val = state.derivedStats[enKey] ?? state.stats[enKey] ?? 0;
                 return val.toString();
             });
-
-            // 2. Evaluate
-            // We pass an empty scope because all variables should have been replaced by numbers.
             return math.evaluate(processedFormula, {});
         } catch (e) {
             console.error(`Formula evaluation error: ${formula}`, e);
@@ -390,16 +314,14 @@ export class CharacterCalculator {
         }
     }
 
-    /**
-     * Gathers all formulas from defaults and character state (equipment/skills).
-     */
     public static getFormulas(state: CharacterState): Record<string, string> {
         const formulas = { ...this.DEFAULT_FORMULAS };
 
         // Apply Equipment Overrides
-        for (const item of state.equipment) {
-            if (item.formulaOverrides) {
-                for (const [key, formula] of Object.entries(item.formulaOverrides)) {
+        for (const item of state.equipmentSlots) {
+            const variant = item.variants[item.currentVariant || 'default'];
+            if (variant && variant.overrides) {
+                for (const [key, formula] of Object.entries(variant.overrides)) {
                     const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
                     formulas[normalizedKey] = formula;
                 }
@@ -408,33 +330,31 @@ export class CharacterCalculator {
 
         // Apply Skill Overrides
         for (const skill of state.skills) {
-            if (skill.formulaOverrides) {
-                for (const [key, formula] of Object.entries(skill.formulaOverrides)) {
-                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-                    formulas[normalizedKey] = formula;
+            if (skill.category === 'PASSIVE') {
+                const variant = skill.variants[skill.currentVariant || 'default'];
+                if (variant && variant.overrides) {
+                    for (const [key, formula] of Object.entries(variant.overrides)) {
+                        const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
+                        formulas[normalizedKey] = formula;
+                    }
                 }
             }
         }
         return formulas;
     }
 
-    /**
-     * Calculates derived stats based on formulas.
-     * Adds any direct stat bonuses (from Growth/Items) to the formula result.
-     */
     public static calculateDerivedStats(state: CharacterState, formulas: Record<string, string>, overrides: Record<string, number> = {}): void {
         for (const [key, formula] of Object.entries(formulas)) {
             const formulaResult = this.evaluateFormula(formula, state, overrides);
-            const additiveBonus = state.stats[key] || 0;
+            const additiveBonus = state.stats[key] || 0; // If there is a base value (e.g. from item modifier adding to 'MaxHP' directly via stats), add it?
+            // Wait, applyDynamicBonuses adds item modifiers to `stats`.
+            // So if item gives +10 HP, `state.stats.MaxHP` + 10.
+            // Formula 'MaxHP' gives X.
+            // Result = Formula + Base.
             state.derivedStats[key] = formulaResult + additiveBonus;
         }
     }
 
-    /**
-     * Calculates the EXP cost to increase a stat or grade.
-     * @param currentValue The current value of the stat/grade.
-     * @param isGrade True if the stat is 'Grade'.
-     */
     public static calculateStatCost(currentValue: number, isGrade: boolean): number {
         if (isGrade) {
             return currentValue * 10;
@@ -442,63 +362,51 @@ export class CharacterCalculator {
         return currentValue * 5;
     }
 
-    /**
-     * Calculates the EXP cost for skill acquisition.
-     * @param currentStandardSkills Number of existing 'Standard' (General) skills.
-     * @param type Acquisition type.
-     * @param isRetry For Grade skills, is this a retry (2nd attempt onwards)?
-     */
-    public static calculateSkillCost(currentStandardSkills: number, type: 'Free' | 'Standard' | 'Grade' | undefined, isRetry: boolean = false): { success: number, failure: number } {
-        if (type === 'Grade') {
-            return {
-                success: 0,
-                failure: isRetry ? 1 : 0
-            };
+    static calculateSkillCost(currentStandardSkills: number, type: 'Free' | 'Standard' | 'Grade' | undefined, isRetry: boolean = false): { success: number, failure: number } {
+        if (type === 'Free' || type === 'Grade') {
+            return { success: 0, failure: isRetry ? 1 : 0 };
         }
-        if (type === 'Free') {
-            return {
-                success: 0,
-                failure: 0
-            };
-        }
-
-        // Standard (General)
-        // Cost is (Current Standard Skills + 1) * 5
         const cost = (currentStandardSkills + 1) * 5;
-        return {
-            success: cost,
-            failure: 1
-        };
+        return { success: cost, failure: 1 };
     }
 
     /**
-     * Calculates dynamic bonuses from equipment and skills.
-     * Useful for recalculating bonuses when state changes (e.g. resource updates).
+     * Extracts dynamic bonuses from equipment and skills.
+     * Returns a map of Stat Key -> Total Bonus (number).
+     * Used by DicePanel to show/apply dynamic bonuses.
      */
-    public static calculateDynamicBonuses(state: CharacterState): Record<string, number> {
+    static getDynamicBonuses(state: CharacterState): Record<string, number> {
         const bonuses: Record<string, number> = {};
 
-        // Equipment
-        for (const item of state.equipment) {
-            if (item.dynamicModifiers) {
-                for (const [key, formula] of Object.entries(item.dynamicModifiers)) {
-                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-                    const bonus = this.evaluateFormula(formula, state);
-                    bonuses[normalizedKey] = (bonuses[normalizedKey] || 0) + bonus;
-                }
+        const addBonus = (key: string, value: string | number) => {
+            let numVal = 0;
+            if (typeof value === 'number') {
+                numVal = value;
+            } else {
+                numVal = CharacterCalculator.evaluateFormula(value, state);
             }
-        }
+            bonuses[key] = (bonuses[key] || 0) + numVal;
+        };
 
-        // Skills
-        for (const skill of state.skills) {
-            if (skill.dynamicModifiers) {
-                for (const [key, formula] of Object.entries(skill.dynamicModifiers)) {
-                    const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-                    const bonus = this.evaluateFormula(formula, state);
-                    bonuses[normalizedKey] = (bonuses[normalizedKey] || 0) + bonus;
+        // Equipment Modifiers
+        state.equipmentSlots.forEach(item => {
+            const variantKey = item.currentVariant || 'default';
+            const variant = item.variants?.[variantKey] || item.variants?.['default'];
+            if (variant && variant.modifiers) {
+                Object.entries(variant.modifiers).forEach(([key, val]) => addBonus(key, val));
+            }
+        });
+
+        // Passive Skill Modifiers
+        state.skills.forEach(skill => {
+            if (skill.category === 'PASSIVE') {
+                const variantKey = skill.currentVariant || 'default';
+                const variant = skill.variants?.[variantKey] || skill.variants?.['default'];
+                if (variant && variant.modifiers) {
+                    Object.entries(variant.modifiers).forEach(([key, val]) => addBonus(key, val));
                 }
             }
-        }
+        });
 
         return bonuses;
     }
@@ -509,6 +417,7 @@ export namespace CharacterCalculator {
     export interface SessionContext {
         tempStats?: Record<string, number>;
         tempSkills?: CharacterState['skills'];
-        tempItems?: CharacterState['equipment'];
+        tempItems?: CharacterState['inventory'];
+        tempEquipment?: CharacterState['equipmentSlots'];
     }
 }

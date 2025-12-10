@@ -1,11 +1,11 @@
 import { AppError } from '@/domain/shared/AppError';
 import { Result } from '@/domain/shared/Result';
-import { CharacterLogEntry } from '../CharacterLog';
+import { CharacterEvent } from '../Event';
 
 export interface CharacterData {
     id: string;
     name: string;
-    logs: CharacterLogEntry[];
+    events: CharacterEvent[];
     // We might want to store the calculated state snapshot too for performance,
     // but for now, Event Sourcing style: logs are the source of truth.
     // We also store basic profile info separately.

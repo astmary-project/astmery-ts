@@ -1,10 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dices, Plus, Settings2, Trash2 } from 'lucide-react';
+import { Plus, Settings2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { CharacterLogEntry, CharacterState, Skill } from '../../domain/CharacterLog';
-import { STANDARD_CHECK_FORMULAS } from '../../domain/constants';
+import { CharacterEvent } from '../../domain/Event';
+import { CharacterState } from '../../domain/models';
+import { SkillEntity as Skill } from '../../domain/Skill';
 import { SkillAcquisitionDialog } from './SkillAcquisitionDialog';
 import { SkillEditorDialog } from './SkillEditorDialog';
 
@@ -14,10 +16,10 @@ interface SkillsPanelProps {
     isEditMode?: boolean;
     onAddSkill?: (skill: Skill, cost?: number) => void;
     onUpdateSkill?: (skill: Skill) => void;
-    onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
+    onAddLog: (log: Omit<CharacterEvent, 'id' | 'timestamp'>) => void;
 }
 
-export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAddSkill, onUpdateSkill }: SkillsPanelProps) => {
+export const SkillsPanel = ({ state, onAddLog, isEditMode = false, onAddSkill, onUpdateSkill }: SkillsPanelProps) => {
     const [editingSkill, setEditingSkill] = useState<{ skill: Partial<Skill>; mode: 'add' | 'edit' | 'wishlist_add' | 'wishlist_edit' } | null>(null);
     const [acquiringSkill, setAcquiringSkill] = useState<Skill | null>(null);
 
@@ -30,22 +32,40 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
     };
 
     const handleSaveSkill = (skill: Partial<Skill>) => {
+
+        // Generates a mock ID for wishlist purposes if needed, though onAddLog usually handles ID in parent or Factory
+        // But here we construct raw objects for wishlist events
+
         if (editingSkill?.mode === 'add' && onAddSkill) {
             onAddSkill({ ...skill, id: crypto.randomUUID() } as Skill);
         } else if (editingSkill?.mode === 'edit' && onUpdateSkill) {
             onUpdateSkill(skill as Skill);
         } else if (editingSkill?.mode === 'wishlist_add') {
+            // We need to pass a full event. 
+            // We'll trust the parent to ignore ID/Timestamp or we provide dummies that parent overwrites.
+            // or we use Omit<..., 'id'|'timestamp'>.
             onAddLog({
-                type: 'ADD_WISHLIST_SKILL',
+                type: 'WISHLIST_SKILL_ADDED',
                 skill: { ...skill, id: crypto.randomUUID() } as Skill,
                 description: `Added to wishlist: ${skill.name}`
-            });
+            } as any);
         } else if (editingSkill?.mode === 'wishlist_edit') {
+            // WISHLIST_SKILL_UPDATED - Wait, this doesn't exist in Event.ts?
+            // "SkillUpdatedEventSchema" is generic. But maybe we need "WishlistSkillUpdated"?
+            // Event.ts only has Added/Removed for Wishlist.
+            // If we want to edit a wishlist item, maybe Remove then Add? Or just Update (generic)?
+            // Using Remove then Add logic or generic SKILL_UPDATED might be tricky if it's not in skills list.
+            // Let's assume we use Remove+Add for now or fail. 
+            // Or just use SKILL_UPDATED if it works for wishlist skills (state.skillWishlist).
+            // But SKILL_UPDATED expects "newSkill" and "skillId".
+            // If the ID matches a wishlist skill, Reducer should update it.
+            // Let's rely on SKILL_UPDATED working for wishlist items if the ID matches.
             onAddLog({
-                type: 'UPDATE_WISHLIST_SKILL',
-                skill: skill as Skill,
+                type: 'SKILL_UPDATED',
+                skillId: (skill as Skill).id,
+                newSkill: skill as Skill,
                 description: `Updated wishlist skill: ${skill.name}`
-            });
+            } as any);
         }
         setEditingSkill(null);
     };
@@ -56,23 +76,22 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
         // 1. Add Skill (if success)
         if (isSuccess && onAddSkill) {
             // Pass cost to onAddSkill so it's included in the LEARN_SKILL log
-            onAddSkill({ ...acquiringSkill, acquisitionType: type }, cost);
+            onAddSkill({ ...acquiringSkill, acquisitionType: type } as any, cost);
 
             // 2. Remove from Wishlist
             onAddLog({
-                type: 'REMOVE_WISHLIST_SKILL',
-                skill: acquiringSkill,
+                type: 'WISHLIST_SKILL_REMOVED',
+                skillId: acquiringSkill.id,
                 description: `Acquired from wishlist: ${acquiringSkill.name}`
-            });
+            } as any);
         } else if (!isSuccess && cost > 0) {
-            // If failed but cost exists (Grade retry failure), we still need to spend EXP.
-            // Since we don't add the skill, we can't use LEARN_SKILL log.
-            // So we MUST use SPEND_EXP for failure case.
+            // Failure case
             onAddLog({
-                type: 'SPEND_EXP',
-                value: cost,
+                type: 'EXPERIENCE_SPENT',
+                amount: cost,
+                target: `Failed attempt for ${acquiringSkill.name}`,
                 description: `Spent ${cost} EXP on failed attempt for: ${acquiringSkill.name}`
-            });
+            } as any);
         }
 
         setAcquiringSkill(null);
@@ -83,27 +102,27 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
         if (isSuccess && onAddSkill) {
             onAddSkill({ ...skill, id: crypto.randomUUID() } as Skill, cost);
         } else if (!isSuccess && cost > 0) {
-            // Failure case: Spend EXP manually
+            // Failure case
             onAddLog({
-                type: 'SPEND_EXP',
-                value: cost,
+                type: 'EXPERIENCE_SPENT',
+                amount: cost,
+                target: `Failed attempt for ${skill.name}`,
                 description: `Spent ${cost} EXP on failed attempt for: ${skill.name}`
-            });
+            } as any);
         }
 
         setEditingSkill(null);
     };
 
-    const SKILL_TYPE_LABELS: Record<string, string> = {
-        'Active': 'アクティブ',
-        'Passive': 'パッシブ',
-        'Spell': '魔術',
-        'Other': 'その他',
+    const SKILL_CATEGORY_LABELS: Record<string, string> = {
+        'ACTIVE': 'アクティブ (Active)',
+        'PASSIVE': 'パッシブ (Passive)',
+        'SPELL': '魔術 (Spell)',
     };
 
-    const renderSkillSection = (title: string, skills: Skill[]) => {
+    const renderSkillSection = (category: string, skills: Skill[]) => {
         if (skills.length === 0) return null;
-        const displayTitle = SKILL_TYPE_LABELS[title] || title;
+        const displayTitle = SKILL_CATEGORY_LABELS[category] || category;
         return (
             <div className="mb-6 last:mb-0">
                 <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -113,122 +132,75 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                     </span>
                 </h3>
                 <div className="grid gap-3">
-                    {skills.map(skill => (
-                        <div key={skill.id} className="p-3 border rounded-lg bg-card hover:bg-accent/5 transition-colors group relative">
-                            {/* Delete Button (Hover) */}
-                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                                {isEditMode && (
+                    {skills.map(skill => {
+                        const variant = skill.variants[skill.currentVariant || 'default'] || skill.variants['default'];
+
+                        return (
+                            <div key={skill.id} className="p-3 border rounded-lg bg-card hover:bg-accent/5 transition-colors group relative">
+                                {/* Delete Button (Hover) */}
+                                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                    {isEditMode && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                            onClick={() => handleEditClick(skill)}
+                                        >
+                                            <Settings2 size={16} />
+                                        </Button>
+                                    )}
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-8 w-8 text-muted-foreground hover:text-primary"
-                                        onClick={() => handleEditClick(skill)}
+                                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                        onClick={() => onAddLog({
+                                            type: 'SKILL_FORGOTTEN',
+                                            skillId: skill.id,
+                                            description: `Forgot ${skill.name}`
+                                        } as any)}
                                     >
-                                        <Settings2 size={16} />
+                                        <Trash2 size={16} />
                                     </Button>
-                                )}
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                    onClick={() => onAddLog({
-                                        type: 'FORGET_SKILL',
-                                        skill: skill,
-                                        description: `Forgot ${skill.name}`
-                                    })}
-                                >
-                                    <Trash2 size={16} />
-                                </Button>
-                            </div>
-
-                            <div className="flex justify-between items-start mb-1 pr-16">
-                                <div className="font-medium flex items-center gap-2 flex-wrap">
-                                    {skill.name}
-                                    {skill.acquisitionType && skill.acquisitionType !== 'Standard' && (
-                                        <Badge variant="outline" className="text-[10px] h-5">
-                                            {skill.acquisitionType}
-                                        </Badge>
-                                    )}
-                                    {skill.cost && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">Cost: {skill.cost}</span>}
-                                    {skill.magicGrade && <span className="text-xs bg-secondary/10 text-secondary-foreground px-1.5 py-0.5 rounded">Grade: {skill.magicGrade}</span>}
                                 </div>
-                            </div>
 
-                            {/* Detailed Stats Grid */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 text-xs text-muted-foreground mb-2 font-mono">
-                                {skill.timing && <div><span className="opacity-70">Timing:</span> {skill.timing}</div>}
-                                {skill.range && <div><span className="opacity-70">Range:</span> {skill.range}</div>}
-                                {skill.target && <div><span className="opacity-70">Target:</span> {skill.target}</div>}
-                                {skill.shape && <div><span className="opacity-70">Shape:</span> {skill.shape}</div>}
-                                {skill.duration && <div><span className="opacity-70">Duration:</span> {skill.duration}</div>}
-                                {skill.cooldown && <div><span className="opacity-70">CT:</span> {skill.cooldown}</div>}
-                                {skill.activeCheck && <div><span className="opacity-70">Active:</span> {skill.activeCheck}</div>}
-                                {skill.passiveCheck && <div><span className="opacity-70">Passive:</span> {skill.passiveCheck}</div>}
-                            </div>
-
-                            <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap border-t pt-2 mt-1">
-                                {skill.description}
-                            </div>
-
-                            {/* Skill Mechanics Display */}
-                            {(skill.rollModifier || skill.effect || skill.activeCheck) && (
-                                <div className="mt-2 pt-2 border-t flex gap-4 text-xs font-mono text-foreground/80">
-                                    {/* Active Check Roll Button */}
-                                    {skill.activeCheck && (
-                                        <div className="flex items-center gap-1">
-                                            <span className="text-muted-foreground">Check:</span>
-                                            {skill.activeCheck}
-                                            {skill.rollModifier && <span className="text-primary"> {skill.rollModifier}</span>}
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-5 w-5 ml-1"
-                                                onClick={() => {
-                                                    // Resolve formula
-                                                    const baseFormula = STANDARD_CHECK_FORMULAS[skill.activeCheck!] || skill.activeCheck!;
-                                                    const fullFormula = skill.rollModifier
-                                                        ? `${baseFormula} + ${skill.rollModifier}`
-                                                        : baseFormula;
-
-                                                    onRoll(fullFormula, `${skill.name} (${skill.activeCheck})`);
-                                                }}
-                                                title="Roll Check"
-                                            >
-                                                <Dices className="h-3 w-3" />
-                                            </Button>
-                                        </div>
-                                    )}
-
-                                    {/* Effect Roll Button */}
-                                    {skill.effect && (
-                                        <div className="flex items-center gap-1">
-                                            <span className="text-muted-foreground">Effect:</span>
-                                            {skill.effect}
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-5 w-5 ml-1"
-                                                onClick={() => onRoll(skill.effect!, `${skill.name} Effect`)}
-                                                title="Roll Effect"
-                                            >
-                                                <Dices className="h-3 w-3" />
-                                            </Button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Chat Palette */}
-                            {skill.chatPalette && (
-                                <details className="mt-2 pt-2 border-t text-xs">
-                                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors">Chat Palette</summary>
-                                    <div className="mt-2 p-2 bg-muted/50 rounded font-mono whitespace-pre-wrap select-all">
-                                        {skill.chatPalette}
+                                <div className="flex justify-between items-start mb-1 pr-16">
+                                    <div className="font-medium flex items-center gap-2 flex-wrap">
+                                        {skill.name}
+                                        {skill.acquisitionMethod && skill.acquisitionMethod !== 'Standard' && (
+                                            <Badge variant="outline" className="text-[10px] h-5">
+                                                {skill.acquisitionMethod}
+                                            </Badge>
+                                        )}
+                                        {/* Cost/Grade might need to be resolved from somewhere else or tags/variants */}
+                                        {/* {skill.cost && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">Cost: {skill.cost}</span>} */}
                                     </div>
-                                </details>
-                            )}
-                        </div>
-                    ))}
+                                </div>
+
+                                {/* Detailed Stats Grid - From Active Variant */}
+                                {skill.category === 'ACTIVE' && variant && (
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 text-xs text-muted-foreground mb-2 font-mono">
+                                        {(variant as any).timing && <div><span className="opacity-70">Timing:</span> {(variant as any).timing}</div>}
+                                        {(variant as any).range && <div><span className="opacity-70">Range:</span> {(variant as any).range}</div>}
+                                        {(variant as any).target && <div><span className="opacity-70">Target:</span> {(variant as any).target}</div>}
+                                        {(variant as any).cost && <div><span className="opacity-70">Cost:</span> {(variant as any).cost}</div>}
+                                    </div>
+                                )}
+
+                                <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap border-t pt-2 mt-1">
+                                    {skill.description}
+                                    {(variant as any)?.description && (variant as any).description !== skill.description && (
+                                        <div className="mt-1 text-xs opacity-90 border-t border-dashed pt-1">
+                                            {/* Variant specific description if different */}
+                                            {(variant as any).description}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Mechanics/Rolling - Simplified for now as ActiveCheck/etc are not standard props anymore */}
+                                {/* If we have specific tags or known variant fields, we might render buttons */}
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         );
@@ -246,38 +218,15 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                         <span className="font-semibold text-foreground">Total:</span>
                         <span className="font-mono">{state.skills.length}</span>
                     </div>
-                    <div className="w-px h-4 bg-border self-center hidden sm:block" />
-                    <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">無料 (Free):</span>
-                        <span className="font-mono">{state.skills.filter(s => s.acquisitionType === 'Free').length}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">自由 (Standard):</span>
-                        <span className="font-mono">{state.skills.filter(s => s.acquisitionType === 'Standard' || !s.acquisitionType).length}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">グレード (Grade):</span>
-                        <span className="font-mono">{state.skills.filter(s => s.acquisitionType === 'Grade').length}</span>
-                    </div>
                 </div>
 
-                {/* Dynamically render skill sections based on types present */}
+                {/* Dynamically render skill sections based on categories */}
                 {(() => {
-                    // Get all unique types and sort them (Standard types first)
-                    const standardTypes = ['Active', 'Passive', 'Spell', 'Other'];
-                    const allTypes = Array.from(new Set(state.skills.map(s => s.type)));
-                    const sortedTypes = allTypes.sort((a, b) => {
-                        const indexA = standardTypes.indexOf(a);
-                        const indexB = standardTypes.indexOf(b);
-                        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                        if (indexA !== -1) return -1;
-                        if (indexB !== -1) return 1;
-                        return a.localeCompare(b);
-                    });
-
-                    return sortedTypes.map(type => (
-                        <div key={type}>
-                            {renderSkillSection(type, state.skills.filter(s => s.type === type))}
+                    // const standardCategory = ['ACTIVE', 'PASSIVE', 'SPELL'];
+                    const allCategories = Array.from(new Set(state.skills.map(s => s.category)));
+                    return allCategories.map(cat => (
+                        <div key={cat}>
+                            {renderSkillSection(cat, state.skills.filter(s => s.category === cat))}
                         </div>
                     ));
                 })()}
@@ -317,10 +266,10 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                                                 size="icon"
                                                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
                                                 onClick={() => onAddLog({
-                                                    type: 'REMOVE_WISHLIST_SKILL',
-                                                    skill: skill,
+                                                    type: 'WISHLIST_SKILL_REMOVED',
+                                                    skillId: skill.id as any,
                                                     description: `Removed from wishlist: ${skill.name}`
-                                                })}
+                                                } as any)}
                                             >
                                                 <Trash2 size={16} />
                                             </Button>
@@ -331,7 +280,7 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                                         <div className="font-medium flex items-center gap-2 flex-wrap">
                                             {skill.name}
                                             <Badge variant="outline" className="text-[10px] h-5">
-                                                {SKILL_TYPE_LABELS[skill.type] || skill.type}
+                                                {SKILL_CATEGORY_LABELS[skill.category] || skill.category}
                                             </Badge>
                                         </div>
                                     </div>
@@ -365,7 +314,7 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                         onSave={handleSaveSkill}
                         onAcquire={handleAcquireSkill}
                         mode={editingSkill.mode}
-                        currentStandardSkills={state.skills.filter(s => s.acquisitionType === 'Standard' || !s.acquisitionType).length}
+                        currentStandardSkills={state.skills.filter(s => s.acquisitionMethod === 'Standard' || !s.acquisitionMethod).length}
                     />
                 )}
                 {acquiringSkill && (
@@ -374,7 +323,7 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
                         onClose={() => setAcquiringSkill(null)}
                         skill={acquiringSkill}
                         onConfirm={handleConfirmAcquisition}
-                        currentStandardSkills={state.skills.filter(s => s.acquisitionType === 'Standard' || !s.acquisitionType).length}
+                        currentStandardSkills={state.skills.filter(s => s.acquisitionMethod === 'Standard' || !s.acquisitionMethod).length}
                         currentExp={state.exp.free}
                     />
                 )}

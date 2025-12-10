@@ -1,7 +1,11 @@
+import { CharacterEventId } from '@/domain/values/ids';
+import { Timestamp } from '@/domain/values/time';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useMemo, useState } from 'react';
 import { CharacterCalculator } from '../domain/CharacterCalculator';
-import { CharacterLogEntry, CharacterState } from '../domain/CharacterLog';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { CharacterEvent } from '@/features/character/domain/Event';
+import { CharacterState } from '../domain/models';
 import { ICharacterRepository } from '../domain/repository/ICharacterRepository';
 import { SupabaseCharacterRepository } from '../infrastructure/SupabaseCharacterRepository';
 
@@ -10,7 +14,7 @@ const repository: ICharacterRepository = new SupabaseCharacterRepository(supabas
 
 export const useCharacterSheet = (characterId: string, sessionContext?: CharacterCalculator.SessionContext) => {
     const [name, setName] = useState<string>('');
-    const [logs, setLogs] = useState<CharacterLogEntry[]>([]);
+    const [events, setEvents] = useState<CharacterEvent[]>([]);
     const [characterProfile, setCharacterProfile] = useState<{
         avatarUrl?: string;
         bio?: string;
@@ -22,19 +26,9 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
     const [error, setError] = useState<string | null>(null);
 
     // Calculated State
-    // We calculate this on every render or useMemo. Since logs can be large, useMemo is better.
-    // But for now, let's calculate it inside the hook body or useMemo.
-    // Ideally, we might want to store the state in React state if calculation is heavy,
-    // but CharacterCalculator is fast enough for now.
-    // Calculated State
-    // We calculate this on every render or useMemo. Since logs can be large, useMemo is better.
-    // But for now, let's calculate it inside the hook body or useMemo.
-    // Ideally, we might want to store the state in React state if calculation is heavy,
-    // but CharacterCalculator is fast enough for now.
-    // Calculated State
     const state: CharacterState = useMemo(() => {
-        return CharacterCalculator.calculateState(logs, {}, sessionContext, characterProfile?.tags || []);
-    }, [logs, sessionContext, characterProfile?.tags]);
+        return CharacterCalculator.calculateState(events, {}, sessionContext, characterProfile?.tags || []);
+    }, [events, sessionContext, characterProfile?.tags]);
 
     const [userId, setUserId] = useState<string | undefined>();
     const [ownerName, setOwnerName] = useState<string | undefined>();
@@ -61,40 +55,39 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
                 const result = await repository.load(characterId);
                 if (result.isSuccess) {
                     const data = result.value;
-                    let currentLogs = data.logs;
+                    let currentEvents = data.events;
                     let needsMigration = false;
 
-                    // Migration: Convert legacy GROWTH to GROW_STAT
-                    const migratedLogs = currentLogs.map(log => {
-                        if (log.type === 'GROWTH' && log.statKey && log.value !== undefined) {
+                    // Migration logic: Check for legacy 'GROWTH' logs
+                    // We cast to any to allow checking for potentially legacy types not in current Union
+                    const migratedEvents = currentEvents.map((event: any) => {
+                        if (event.type === 'GROWTH' && event.statKey && event.value !== undefined) {
                             needsMigration = true;
                             return {
-                                ...log,
-                                type: 'GROW_STAT',
-                                statGrowth: {
-                                    key: log.statKey,
-                                    value: log.value,
-                                    cost: 0 // Default cost for migrated logs
-                                },
-                                // Remove legacy fields
+                                ...event,
+                                type: 'STAT_GROWN',
+                                key: event.statKey,
+                                delta: event.value,
+                                cost: 0, // Default cost for migrated logs
+                                // Clean up legacy fields if spreading
                                 statKey: undefined,
                                 value: undefined
-                            } as CharacterLogEntry;
+                            } as CharacterEvent;
                         }
-                        return log;
+                        return event as CharacterEvent;
                     });
 
                     if (needsMigration) {
                         console.log('Migrating legacy logs...');
                         await repository.save({
                             ...data,
-                            logs: migratedLogs
+                            events: migratedEvents
                         });
-                        currentLogs = migratedLogs;
+                        currentEvents = migratedEvents;
                     }
 
                     setName(data.name);
-                    setLogs(currentLogs);
+                    setEvents(currentEvents);
                     setUserId(data.userId); // Set userId
                     if (data.profile) {
                         setCharacterProfile(data.profile);
@@ -113,7 +106,6 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
                         }
                     }
                 } else {
-                    // Initialize with empty or default if not found (for demo)
                     console.log('Character not found, starting fresh');
                     if (result.error.code !== 'RESOURCE_NOT_FOUND') {
                         console.error(result.error);
@@ -130,45 +122,42 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
         load();
     }, [characterId]);
 
-    const addLog = async (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => {
-        const newLog: CharacterLogEntry = {
-            ...log,
-            id: crypto.randomUUID(),
-            timestamp: Date.now(),
-        };
+    const addEvent = async (event: Omit<CharacterEvent, 'id' | 'timestamp'>) => {
+        const newEvent: CharacterEvent = {
+            ...event,
+            id: crypto.randomUUID() as CharacterEventId,
+            timestamp: Date.now() as Timestamp,
+        } as CharacterEvent;
 
-        setLogs(prevLogs => {
-            const newLogs = [...prevLogs, newLog];
+        setEvents(prevEvents => {
+            const newEvents = [...prevEvents, newEvent];
             // Auto-save (Optimistic)
-            // Note: We call save here to ensure we use the new logs.
-            // Since this is inside the updater, we catch the latest state.
-            save(name, newLogs, characterProfile);
-            return newLogs;
+            save(name, newEvents, characterProfile);
+            return newEvents;
         });
     };
 
-    const save = async (name: string, currentLogs: CharacterLogEntry[], profile: { avatarUrl?: string; bio?: string; specialtyElements?: string[]; tags?: string[] } | undefined) => {
+    const save = async (name: string, currentEvents: CharacterEvent[], profile: { avatarUrl?: string; bio?: string; specialtyElements?: string[]; tags?: string[] } | undefined) => {
         try {
             const result = await repository.save({
                 id: characterId,
                 name: name,
-                logs: currentLogs,
+                events: currentEvents,
                 profile: profile,
-                userId: userId // Pass userId to save
+                userId: userId
             });
             if (result.isFailure) {
                 console.error('Failed to save', result.error);
             }
         } catch (e) {
             console.error('Unexpected error saving', e);
-            // Handle error (toast etc)
         }
     };
 
     const updateProfile = async (profile: Partial<typeof characterProfile>) => {
         const newProfile = { ...characterProfile, ...profile };
         setCharacterProfile(newProfile);
-        await save(name, logs, newProfile);
+        await save(name, events, newProfile);
     };
 
     const addTag = async (tag: string) => {
@@ -185,30 +174,30 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
 
     const updateName = async (name: string) => {
         setName(name);
-        await save(name, logs, characterProfile);
+        await save(name, events, characterProfile);
     };
 
     const updateCharacter = async (updates: {
         name?: string;
         profile?: Partial<typeof characterProfile>;
-        logs?: CharacterLogEntry[];
+        events?: CharacterEvent[];
     }) => {
         const newName = updates.name ?? name;
         const newProfile = updates.profile ? { ...characterProfile, ...updates.profile } : characterProfile;
-        const newLogs = updates.logs ?? logs;
+        const newEvents = updates.events ?? events;
 
         if (updates.name !== undefined) setName(newName);
         if (updates.profile) setCharacterProfile(newProfile);
-        if (updates.logs) setLogs(newLogs);
+        if (updates.events) setEvents(newEvents);
 
-        await save(newName, newLogs, newProfile);
+        await save(newName, newEvents, newProfile);
     };
 
-    const deleteLog = async (logId: string) => {
-        setLogs(prevLogs => {
-            const newLogs = prevLogs.filter(l => l.id !== logId);
-            save(name, newLogs, characterProfile);
-            return newLogs;
+    const deleteEvent = async (eventId: string) => {
+        setEvents(prevEvents => {
+            const newEvents = prevEvents.filter(l => l.id !== eventId);
+            save(name, newEvents, characterProfile);
+            return newEvents;
         });
     };
 
@@ -235,22 +224,22 @@ export const useCharacterSheet = (characterId: string, sessionContext?: Characte
         name,
         character: characterProfile,
         state,
-        logs,
+        events,
         isLoading,
         error,
         isEditMode,
         toggleEditMode: () => setIsEditMode(prev => !prev),
         updateName,
-        addLog,
-        deleteLog,
+        addEvent,
+        deleteEvent,
         updateProfile,
         addTag,
         removeTag,
         updateCharacter,
-        reload: () => window.location.reload(), // Temp
-        userId, // Return userId
-        ownerName, // Return ownerName
-        isAdmin, // Return isAdmin
-        deleteCharacter // Return deleteCharacter
+        reload: () => window.location.reload(),
+        userId,
+        ownerName,
+        isAdmin,
+        deleteCharacter
     };
 };

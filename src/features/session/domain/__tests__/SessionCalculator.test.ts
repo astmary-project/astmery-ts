@@ -1,15 +1,16 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from 'vitest';
-import { CharacterState } from '../../../character/domain/CharacterLog';
+import { CharacterState } from '../../../character/domain/models';
 import { SessionCalculator } from '../SessionCalculator';
 import { SessionLogEntry } from '../SessionLog';
 
 describe('SessionCalculator', () => {
     // Mock State Helper
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const createMockState = (resources: any[] = [], derivedStats: Record<string, number> = {}): CharacterState => ({
         stats: {},
-        tags: new Set(),
-        equipment: [],
+        tags: [],
+        inventory: [],
+        equipmentSlots: [],
         skills: [],
         skillWishlist: [],
         exp: { total: 0, used: 0, free: 0 },
@@ -22,7 +23,7 @@ describe('SessionCalculator', () => {
 
     it('should update resource value', () => {
         const state = createMockState([
-            { id: 'HP', name: 'Hit Points', max: 10, min: 0, initial: 10 }
+            { id: 'HP', name: 'Hit Points', max: '10', min: '0', initial: '10' }
         ]);
 
         let currentValues: Record<string, number> = {};
@@ -40,7 +41,7 @@ describe('SessionCalculator', () => {
 
     it('should reset resource value', () => {
         const state = createMockState([
-            { id: 'HP', name: 'Hit Points', max: 10, min: 0, initial: 10 }
+            { id: 'HP', name: 'Hit Points', max: '10', min: '0', initial: '10' }
         ]);
 
         let currentValues: Record<string, number> = { 'HP': 5 };
@@ -58,9 +59,9 @@ describe('SessionCalculator', () => {
 
     it('should reset all resources', () => {
         const state = createMockState([
-            { id: 'HP', name: 'Hit Points', max: 10, min: 0, initial: 10, resetMode: 'initial' },
-            { id: 'MP', name: 'Magic Points', max: 5, min: 0, initial: 5, resetMode: 'initial' },
-            { id: 'Gold', name: 'Gold', max: 999, min: 0, initial: 0, resetMode: 'none' }
+            { id: 'HP', name: 'Hit Points', max: '10', min: '0', initial: '10', resetMode: 'initial' },
+            { id: 'MP', name: 'Magic Points', max: '5', min: '0', initial: '5', resetMode: 'initial' },
+            { id: 'Gold', name: 'Gold', max: '999', min: '0', initial: '0', resetMode: 'none' }
         ]);
 
         let currentValues: Record<string, number> = {
@@ -84,9 +85,10 @@ describe('SessionCalculator', () => {
 
     it('should handle implicit HP/MP reset', () => {
         // HP/MP are implicitly ensured if not registered, using derivedStats for Max
+        // MaxHP is used for implicit HP max.
         const state = createMockState([], {
-            'HP': 30, // MaxHP
-            'MP': 10
+            'MaxHP': 30, // MaxHP derived stat
+            'MaxMP': 10
         });
 
         let currentValues: Record<string, number> = {
@@ -101,7 +103,7 @@ describe('SessionCalculator', () => {
 
         currentValues = SessionCalculator.applyLog(currentValues, log, state);
 
-        // HP should be reset to Max (30)
+        // HP should be reset to MaxHP (30)
         expect(currentValues['HP']).toBe(30);
     });
 });

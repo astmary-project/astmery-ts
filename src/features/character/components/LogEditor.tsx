@@ -5,16 +5,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import React, { useState } from 'react';
-import { CharacterLogEntry, CharacterLogType } from '../domain/CharacterLog';
 import { CharacterLogFactory } from '../domain/CharacterLogFactory';
 import { ABILITY_STATS, STAT_LABELS } from '../domain/constants';
+import { CharacterEvent } from '../domain/Event';
+
+// Local UI state type (legacy mapping)
+type UiLogType = 'GROWTH' | 'GAIN_EXP' | 'SPEND_EXP' | 'LEARN_SKILL' | 'EQUIP' | 'REGISTER_STAT_LABEL' | 'REGISTER_RESOURCE';
 
 interface LogEditorProps {
-    onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
+    onAddEvent: (event: Omit<CharacterEvent, 'id' | 'timestamp'>) => void;
 }
 
-export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
-    const [type, setType] = useState<CharacterLogType>('GROWTH');
+export const LogEditor: React.FC<LogEditorProps> = ({ onAddEvent }) => {
+    const [type, setType] = useState<UiLogType>('GROWTH');
     const [statKey, setStatKey] = useState('Grade');
     const [value, setValue] = useState('');
     const [expCost, setExpCost] = useState('');
@@ -38,25 +41,29 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        let log: CharacterLogEntry | null = null;
+        let event: CharacterEvent | null = null;
 
         if (type === 'GROWTH') {
             const numValue = parseFloat(value);
             if (isNaN(numValue)) return;
-            log = CharacterLogFactory.createGrowthLog(statKey, numValue, comment);
+            // Factory expects (key, delta, cost, comment)
+            const costVal = expCost ? parseFloat(expCost) : undefined;
+            event = CharacterLogFactory.createStatGrown(statKey, numValue, costVal, comment);
         } else if (type === 'GAIN_EXP') {
             const numValue = parseFloat(value);
             if (isNaN(numValue)) return;
-            log = CharacterLogFactory.createGainExpLog(numValue, comment || 'Gained EXP');
+            event = CharacterLogFactory.createExperienceGained(numValue, comment || 'Gained EXP');
         } else if (type === 'SPEND_EXP') {
             const numValue = parseFloat(value);
             if (isNaN(numValue)) return;
-            log = CharacterLogFactory.createSpendExpLog(numValue, comment || 'Spent EXP');
+            event = CharacterLogFactory.createExperienceSpent(numValue, comment || 'Spent EXP');
         } else if (type === 'LEARN_SKILL') {
-            log = CharacterLogFactory.createSkillLog({
+            event = CharacterLogFactory.createSkillLearned({
                 name,
                 type: subtype === 'Custom' ? customSubtype : subtype,
-                description: description, // Skill description
+                description: description,
+                // Pass timing/range etc only if Active
+                // But Factory handles fallback, so passing all is fine
                 timing,
                 range,
                 target,
@@ -64,37 +71,31 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                 modifiersJson,
                 dynamicModifiersJson
             });
-            if (comment) log.description = `${log.description} - ${comment}`;
+            if (comment) event.description = `${event.description} - ${comment}`;
         } else if (type === 'EQUIP') {
-            log = CharacterLogFactory.createItemLog({
+            // Determine category
+            const isEquipment = ['Weapon', 'Armor', 'Accessory', 'Focus'].includes(subtype);
+
+            event = CharacterLogFactory.createItemAdded({
                 name,
-                subtype,
-                description: description, // Item description
-                timing,
-                range,
+                category: isEquipment ? 'EQUIPMENT' : 'CONSUMABLE',
+                description: description,
+                // Legacy params
+                subtype: subtype,
                 modifiersJson,
                 dynamicModifiersJson
             });
-            if (comment) log.description = `${log.description} - ${comment}`;
+            if (comment) event.description = `${event.description} - ${comment}`;
         } else if (type === 'REGISTER_STAT_LABEL') {
-            log = CharacterLogFactory.createRegisterStatLabelLog(statKey, name, isMainStat);
-            if (comment) log.description = `${log.description} - ${comment}`;
+            event = CharacterLogFactory.createStatLabelRegistered(statKey, name, isMainStat);
+            if (comment) event.description = `${event.description} - ${comment}`;
         } else if (type === 'REGISTER_RESOURCE') {
-            log = CharacterLogFactory.createRegisterResourceLog(name, Number(value), Number(cost));
-            if (comment) log.description = `${log.description} - ${comment}`;
+            event = CharacterLogFactory.createResourceDefined(name, value, cost);
+            if (comment) event.description = `${event.description} - ${comment}`;
         }
 
-        if (log) {
-            onAddLog(log);
-        }
-
-        // Handle EXP Cost for Growth
-        if (type === 'GROWTH' && expCost) {
-            const costVal = parseFloat(expCost);
-            if (!isNaN(costVal) && costVal > 0) {
-                const costLog = CharacterLogFactory.createSpendExpLog(costVal, `Cost for ${statKey} growth`);
-                onAddLog(costLog);
-            }
+        if (event) {
+            onAddEvent(event);
         }
 
         // Reset fields
@@ -123,7 +124,7 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Type</Label>
-                            <Select value={type} onValueChange={(v) => setType(v as CharacterLogType)}>
+                            <Select value={type} onValueChange={(v) => setType(v as UiLogType)}>
                                 <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
@@ -132,7 +133,7 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                                     <SelectItem value="GAIN_EXP">経験点獲得 (Gain EXP)</SelectItem>
                                     <SelectItem value="SPEND_EXP">経験点消費 (Spend EXP)</SelectItem>
                                     <SelectItem value="LEARN_SKILL">スキル習得 (Learn Skill)</SelectItem>
-                                    <SelectItem value="EQUIP">装備 (Equip)</SelectItem>
+                                    <SelectItem value="EQUIP">アイテム追加 (Add Item)</SelectItem>
                                     <SelectItem value="REGISTER_STAT_LABEL">ラベル登録 (Register Label)</SelectItem>
                                     <SelectItem value="REGISTER_RESOURCE">リソース定義 (Define Resource)</SelectItem>
                                 </SelectContent>
@@ -189,6 +190,7 @@ export const LogEditor: React.FC<LogEditorProps> = ({ onAddLog }) => {
                                                 <SelectItem value="Armor">Armor</SelectItem>
                                                 <SelectItem value="Accessory">Accessory</SelectItem>
                                                 <SelectItem value="Focus">Focus</SelectItem>
+                                                <SelectItem value="Consumable">Consumable</SelectItem>
                                                 <SelectItem value="Other">Other</SelectItem>
                                             </>
                                         )}
