@@ -107,9 +107,10 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
 
     async listAll(): Promise<Result<CharacterData[], AppError>> {
         try {
+            // ★修正: character_logs(*) を削除。ここを軽量化するのが目的でした！
             const { data: characters, error } = await this.client
                 .from('characters')
-                .select('*, character_logs(*)')
+                .select('*')
                 .order('updated_at', { ascending: false });
 
             if (error) {
@@ -117,7 +118,7 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
                 return err(AppError.internal('Failed to list characters', error));
             }
 
-            // Fetch user profiles for the characters
+            // ユーザー名の取得ロジック（そのまま）
             const userIds = Array.from(new Set(characters?.map(c => c.user_id).filter(Boolean) || []));
             let profiles: Record<string, string> = {};
 
@@ -132,42 +133,20 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
                 }
             }
 
-            return ok((characters || []).map(d => {
-
-                const validEvents: CharacterEvent[] = [];
-
-                for (const row of d.character_logs) {
-                    // payloadカラムにJSONが入っている想定
-                    // (もしカラム構造が違うなら row.payload などを調整)
-                    const rawEvent = row.payload;
-
-                    const result = CharacterEventSchema.safeParse(rawEvent);
-
-                    if (result.success) {
-                        validEvents.push(result.data);
-                    } else {
-                        console.warn(
-                            `[Repo] Invalid Event dropped (ID: ${row.id}):`,
-                            z.treeifyError(result.error)
-                        );
-                    }
-                }
-
-                validEvents.sort((a: CharacterEvent, b: CharacterEvent) => a.timestamp - b.timestamp);
-
-                return {
-                    id: d.id,
-                    name: d.name,
-                    events: validEvents,
-                    profile: d.profile as { avatarUrl?: string; bio?: string; specialtyElements?: string[]; tags?: string[] },
-                    userId: d.user_id,
-                    ownerName: profiles[d.user_id] || undefined,
-                };
-            }));
+            return ok((characters || []).map(d => ({
+                id: d.id,
+                name: d.name,
+                events: [], // Optimization: Don't load full event history for list view
+                // profile has tags
+                profile: d.profile as { avatarUrl?: string; bio?: string; specialtyElements?: string[]; tags?: string[] },
+                userId: d.user_id,
+                ownerName: profiles[d.user_id] || undefined,
+            })));
         } catch (e) {
             return err(AppError.internal('Unexpected error listing characters', e));
         }
     }
+
     async delete(id: string): Promise<Result<void, AppError>> {
         try {
             const { error } = await this.client
