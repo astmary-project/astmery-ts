@@ -1,6 +1,8 @@
 import { AppError } from '@/domain/shared/AppError';
 import { err, ok, Result } from '@/domain/shared/Result';
 import { SupabaseClient } from '@supabase/supabase-js';
+import z from 'zod';
+import { CharacterEvent, CharacterEventSchema } from '../domain/Event';
 import { CharacterData, ICharacterRepository } from '../domain/repository/ICharacterRepository';
 
 export class SupabaseCharacterRepository implements ICharacterRepository {
@@ -24,14 +26,14 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
                 return err(AppError.internal('Failed to save character', error));
             }
 
-            // Save logs to character_logs table
-            if (character.logs.length > 0) {
-                const logRows = character.logs.map(log => ({
-                    id: log.id,
+            // Save events to character_logs table
+            if (character.events.length > 0) {
+                const logRows = character.events.map(event => ({
+                    id: event.id,
                     character_id: character.id,
-                    type: log.type,
-                    payload: log,
-                    created_at: new Date(log.timestamp).toISOString(),
+                    type: event.type,
+                    payload: event,
+                    created_at: new Date(event.timestamp).toISOString(),
                 }));
 
                 const { error: logError } = await this.client
@@ -42,11 +44,6 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
                     console.error('Failed to save character logs:', logError);
                     return err(AppError.internal('Failed to save character logs', logError));
                 }
-            }
-
-            if (error) {
-                console.error('Failed to save character:', error);
-                return err(AppError.internal('Failed to save character', error));
             }
 
             return ok(undefined);
@@ -74,15 +71,32 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
 
             if (!data) return err(AppError.notFound(`Character not found: ${id}`));
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const logs = (data.character_logs as any[])?.map((row: any) => row.payload as import('../domain/CharacterLog').CharacterLogEntry) || [];
+            const validEvents: CharacterEvent[] = [];
+
+            for (const row of data.character_logs) {
+                // payloadカラムにJSONが入っている想定
+                // (もしカラム構造が違うなら row.payload などを調整)
+                const rawEvent = row.payload;
+
+                const result = CharacterEventSchema.safeParse(rawEvent);
+
+                if (result.success) {
+                    validEvents.push(result.data);
+                } else {
+                    console.warn(
+                        `[Repo] Invalid Event dropped (ID: ${row.id}):`,
+                        z.treeifyError(result.error)
+                    );
+                }
+
+            }
             // Sort logs by timestamp just in case DB doesn't ensure order
-            logs.sort((a, b) => a.timestamp - b.timestamp);
+            validEvents.sort((a, b) => a.timestamp - b.timestamp);
 
             return ok({
                 id: data.id,
                 name: data.name,
-                logs: logs,
+                events: validEvents,
                 profile: data.profile as { avatarUrl?: string; bio?: string; specialtyElements?: string[]; tags?: string[] },
                 userId: data.user_id, // Load userId
             });
@@ -119,14 +133,32 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
             }
 
             return ok((characters || []).map(d => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const logs = (d.character_logs as any[])?.map((row: any) => row.payload as import('../domain/CharacterLog').CharacterLogEntry) || [];
-                logs.sort((a: import('../domain/CharacterLog').CharacterLogEntry, b: import('../domain/CharacterLog').CharacterLogEntry) => a.timestamp - b.timestamp);
+
+                const validEvents: CharacterEvent[] = [];
+
+                for (const row of d.character_logs) {
+                    // payloadカラムにJSONが入っている想定
+                    // (もしカラム構造が違うなら row.payload などを調整)
+                    const rawEvent = row.payload;
+
+                    const result = CharacterEventSchema.safeParse(rawEvent);
+
+                    if (result.success) {
+                        validEvents.push(result.data);
+                    } else {
+                        console.warn(
+                            `[Repo] Invalid Event dropped (ID: ${row.id}):`,
+                            z.treeifyError(result.error)
+                        );
+                    }
+                }
+
+                validEvents.sort((a: CharacterEvent, b: CharacterEvent) => a.timestamp - b.timestamp);
 
                 return {
                     id: d.id,
                     name: d.name,
-                    logs: logs,
+                    events: validEvents,
                     profile: d.profile as { avatarUrl?: string; bio?: string; specialtyElements?: string[]; tags?: string[] },
                     userId: d.user_id,
                     ownerName: profiles[d.user_id] || undefined,

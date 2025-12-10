@@ -103,9 +103,9 @@ export function DicePanel({ state: fallbackState, resourceValues, logs, onLog, t
 
     // CRITICAL: Re-calculate dynamic modifiers (e.g. Skill bonuses based on Resources)
     // 1. Calculate what the bonuses were in the base state (to remove them)
-    const baseDynamicBonuses = CharacterCalculator.calculateDynamicBonuses(characterState);
+    const baseDynamicBonuses = CharacterCalculator.getDynamicBonuses(characterState);
     // 2. Calculate what the bonuses should be now (with live resources)
-    const newDynamicBonuses = CharacterCalculator.calculateDynamicBonuses(activeState);
+    const newDynamicBonuses = CharacterCalculator.getDynamicBonuses(activeState);
 
     // 3. Update stats by removing old bonus and adding new bonus
     for (const [key, newBonus] of Object.entries(newDynamicBonuses)) {

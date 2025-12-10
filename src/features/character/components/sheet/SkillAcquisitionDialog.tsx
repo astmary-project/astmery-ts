@@ -2,9 +2,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { SkillEntity as Skill } from '@/features/character/domain/Skill';
 import React, { useState } from 'react';
 import { CharacterCalculator } from '../../domain/CharacterCalculator';
-import { Skill } from '../../domain/CharacterLog';
 
 interface SkillAcquisitionDialogProps {
     isOpen: boolean;
@@ -23,7 +23,7 @@ export const SkillAcquisitionDialog: React.FC<SkillAcquisitionDialogProps> = ({
     currentStandardSkills,
     currentExp
 }) => {
-    const [type, setType] = useState<'Free' | 'Standard' | 'Grade'>((skill.acquisitionType as 'Free' | 'Standard' | 'Grade') || 'Standard');
+    const [type, setType] = useState<'Free' | 'Standard' | 'Grade'>((skill.acquisitionMethod as 'Free' | 'Standard' | 'Grade') || 'Standard');
     const [isRetry, setIsRetry] = useState(false);
 
     const costs = CharacterCalculator.calculateSkillCost(currentStandardSkills, type, isRetry);
@@ -45,7 +45,7 @@ export const SkillAcquisitionDialog: React.FC<SkillAcquisitionDialogProps> = ({
                     <div className="space-y-2">
                         <Label>習得タイプ</Label>
                         <RadioGroup
-                            value={type}
+                            value={skill.acquisitionMethod || 'Standard'}
                             onValueChange={(val) => setType(val as 'Free' | 'Standard' | 'Grade')}
                             className="flex gap-4"
                         >

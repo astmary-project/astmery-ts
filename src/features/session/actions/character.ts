@@ -1,7 +1,7 @@
 'use server';
 
 import { CharacterCalculator } from '@/features/character/domain/CharacterCalculator';
-import { CharacterState } from '@/features/character/domain/CharacterLog';
+import { CharacterState } from '@/features/character/domain/models';
 import { SupabaseCharacterRepository } from '@/features/character/infrastructure/SupabaseCharacterRepository';
 import { createClient } from '@/lib/supabase-server';
 
@@ -15,7 +15,7 @@ export async function getCharactersStats(characterIds: string[]): Promise<Record
         try {
             const result = await repository.load(id);
             if (result.isSuccess) {
-                results[id] = CharacterCalculator.calculateState(result.value.logs);
+                results[id] = CharacterCalculator.calculateState(result.value.events);
             }
         } catch (e) {
             console.error(`[getCharactersStats] Exception loading ${id}`, e);

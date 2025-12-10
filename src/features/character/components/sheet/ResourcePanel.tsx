@@ -4,13 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { X } from 'lucide-react';
 import React, { useState } from 'react';
-import { CharacterState } from '../../domain/CharacterLog';
+import { CharacterState } from '../../domain/models';
 
 interface ResourcePanelProps {
     state: CharacterState;
     resourceValues: Record<string, number>;
     // New props for Status
-    tags?: Set<string>;
+    tags?: string[];
     isEditMode?: boolean;
     onAddTag?: (tag: string) => void;
     onRemoveTag?: (tag: string) => void;
@@ -66,7 +66,7 @@ export const ResourcePanel = ({ state, resourceValues, tags, isEditMode = false,
                 </CardHeader>
                 <CardContent>
                     <div className="flex flex-wrap gap-2 mb-2">
-                        {tags && Array.from(tags).map((tag) => (
+                        {tags && tags.map((tag) => (
                             <Badge key={tag} variant="secondary" className="text-sm py-1 px-3">
                                 {tag}
                                 {isEditMode && onRemoveTag && (
@@ -79,7 +79,7 @@ export const ResourcePanel = ({ state, resourceValues, tags, isEditMode = false,
                                 )}
                             </Badge>
                         ))}
-                        {(!tags || tags.size === 0) && !isEditMode && (
+                        {(!tags || tags.length === 0) && !isEditMode && (
                             <span className="text-muted-foreground text-sm">状態異常なし</span>
                         )}
                     </div>

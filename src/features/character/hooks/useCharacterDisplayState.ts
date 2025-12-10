@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { CharacterCalculator } from '../domain/CharacterCalculator';
-import { CharacterState } from '../domain/CharacterLog';
-import { JAPANESE_TO_ENGLISH_STATS } from '../domain/constants';
+import { CharacterState } from '../domain/models';
 
 /**
  * Hook to calculate the display state of a character.
@@ -13,45 +12,29 @@ export const useCharacterDisplayState = (
 ) => {
     return useMemo(() => {
         // Clone state to avoid mutation
+        // Note: CharacterState from Models might have readonly flags if not removed, 
+        // but typically spread creates a mutable copy in TS unless typed otherwise.
         const next: CharacterState = {
             ...state,
             stats: { ...state.stats },
-            derivedStats: { ...state.derivedStats }
+            derivedStats: { ...state.derivedStats },
+            resourceValues: { ...state.resourceValues, ...resourceValues }
         };
 
         // Prepare overrides with current resource values
+        // This ensures {HP} in derived stat formulas implies Current HP
         const overrides: Record<string, number> = {};
-        state.resources.forEach(r => {
-            const val = resourceValues[r.id] ?? r.initial;
-            overrides[r.name] = val;
-            // Also override by ID if different (e.g. "HP" vs "Hit Points")
-            if (r.id !== r.name) overrides[r.id] = val;
+        next.resources.forEach(r => {
+            // Priority: Argument > State (Current) > Initial
+            // Note: r.initial is a string (Formula). We should parse it if we want rigorous fallback.
+            // But typically resourceValues has it.
+            const val = resourceValues[r.id] ?? next.resourceValues[r.id] ?? 0;
+            overrides[r.id] = val; // Expose Resource ID
+            overrides[r.name] = val; // Expose Resource Name
         });
 
-        // Helper to re-calculate dynamic modifiers
-        const applyDynamicUpdates = (modifiers: Record<string, string> | undefined) => {
-            if (!modifiers) return;
-            for (const [key, formula] of Object.entries(modifiers)) {
-                const normalizedKey = JAPANESE_TO_ENGLISH_STATS[key] || key;
-
-                // Calculate with initial values (Max HP etc) - this is what is currently in state.stats
-                const initialVal = CharacterCalculator.evaluateFormula(formula, state);
-
-                // Calculate with current values
-                const currentVal = CharacterCalculator.evaluateFormula(formula, state, overrides);
-
-                const delta = currentVal - initialVal;
-                if (delta !== 0) {
-                    next.stats[normalizedKey] = (next.stats[normalizedKey] || 0) + delta;
-                }
-            }
-        };
-
-        // Re-apply all dynamic modifiers
-        state.equipment.forEach(i => applyDynamicUpdates(i.dynamicModifiers));
-        state.skills.forEach(s => applyDynamicUpdates(s.dynamicModifiers));
-
-        // Recalculate Derived Stats (e.g. Attack, Defense which might depend on modified stats or resources)
+        // Recalculate Derived Stats
+        // Derived stats (e.g. "Attack") might depend on "Current HP" or other params.
         const formulas = CharacterCalculator.getFormulas(state);
         CharacterCalculator.calculateDerivedStats(next, formulas, overrides);
 

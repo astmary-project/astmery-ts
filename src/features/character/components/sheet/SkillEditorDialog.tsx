@@ -4,9 +4,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Skill } from '@/features/character/domain/CharacterLog';
+import { SkillEntity as Skill } from '@/features/character/domain/Skill';
 import React, { useEffect, useState } from 'react';
 import { CharacterCalculator } from '../../domain/CharacterCalculator';
+
+// Flattened state for editing to avoid Union hell in form
+interface FlattenedSkillState {
+    name: string;
+    type: string;
+    acquisitionType: string;
+    description: string;
+    // Active / Variant fields
+    effect: string;
+    timing: string;
+    rollModifier: string;
+    target: string;
+    range: string;
+    cost: string;
+    restriction: string;
+    chatPalette: string;
+}
 
 interface SkillEditorDialogProps {
     isOpen: boolean;
@@ -27,36 +44,106 @@ export const SkillEditorDialog: React.FC<SkillEditorDialogProps> = ({
     mode,
     currentStandardSkills = 0
 }) => {
-    const [skill, setSkill] = useState<Partial<Skill>>({
+    const [skillState, setSkillState] = useState<FlattenedSkillState>({
         name: '',
         type: 'Passive',
         acquisitionType: 'Standard',
         description: '',
-        ...initialSkill
+        effect: '',
+        timing: '',
+        rollModifier: '',
+        target: '',
+        range: '',
+        cost: '',
+        restriction: '',
+        chatPalette: '',
     });
 
     useEffect(() => {
         if (isOpen) {
-            // Defer update to avoid set-state-in-effect
-            const timer = setTimeout(() => {
-                setSkill({
-                    name: '',
-                    type: 'Passive',
-                    acquisitionType: 'Standard',
-                    description: '',
-                    ...initialSkill
-                });
-            }, 0);
-            return () => clearTimeout(timer);
-        }
-    }, [isOpen, initialSkill]); // initialSkill intentionally omitted to avoid reset on edit
+            const initFn = async () => {
+                // Initialize from initialSkill if present
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const s = initialSkill as any;
+                const variant = s?.variants?.['default'] || {};
 
-    const handleChange = (field: keyof Skill, value: string) => {
-        setSkill(prev => ({ ...prev, [field]: value }));
+                setSkillState({
+                    name: s?.name || '',
+                    type: s?.category === 'ACTIVE' ? (s?.subType || 'Active') : 'Passive',
+                    acquisitionType: s?.acquisitionMethod || 'Standard',
+                    description: s?.description || '',
+                    effect: variant.effect || '', // For Active
+                    // Passive modifiers are harder to map effectively to single string "effect", 
+                    // but for now we assume simple storage or legacy string mapping?
+                    // "effect" field in UI seems to imply text description of effect.
+
+                    timing: variant.timing || '',
+                    rollModifier: variant.rollFormula || '',
+                    target: variant.target || '',
+                    range: variant.range || '',
+                    cost: variant.cost || '',
+                    restriction: variant.restriction || '',
+                    chatPalette: variant.chatPalette || '',
+                });
+            }
+            initFn();
+        }
+    }, [isOpen, initialSkill]);
+
+    const handleChange = (field: keyof FlattenedSkillState, value: string) => {
+        setSkillState(prev => ({ ...prev, [field]: value }));
+    };
+
+    const buildSkillEntity = (): Partial<Skill> => {
+        // Construct the Entity based on Flattened State
+        const isPassive = skillState.type === 'Passive';
+
+        const base = {
+            name: skillState.name,
+            description: skillState.description,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            acquisitionMethod: skillState.acquisitionType as any,
+            tags: [], // Default
+        };
+
+        if (isPassive) {
+            return {
+                ...base,
+                category: 'PASSIVE',
+                variants: {
+                    default: {
+                        restriction: skillState.restriction,
+                        // Simplification: We don't have a field for "modifiers" JSON editing yet.
+                        // Ideally we'd parse "effect" string or have dedicated fields.
+                        // preserving legacy "effect" in a comment or separate field if needed?
+                        // For Passive, we only have 'passiveCheck', 'modifiers', 'overrides'.
+                        passiveCheck: skillState.effect, // Mapping effect text to passiveCheck
+                    }
+                }
+            } as Partial<Skill>; // Cast as Partial
+        } else {
+            return {
+                ...base,
+                category: 'ACTIVE',
+                subType: skillState.type,
+                variants: {
+                    default: {
+                        timing: skillState.timing,
+                        target: skillState.target,
+                        range: skillState.range,
+                        cost: skillState.cost,
+                        rollFormula: skillState.rollModifier,
+                        effect: skillState.effect,
+                        restriction: skillState.restriction,
+                        chatPalette: skillState.chatPalette,
+                    }
+                }
+            } as Partial<Skill>;
+        }
     };
 
     const handleSave = () => {
-        onSave(skill);
+        onSave(buildSkillEntity());
         onClose();
     };
 
@@ -74,19 +161,19 @@ export const SkillEditorDialog: React.FC<SkillEditorDialogProps> = ({
                     <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
                             <Label>スキル名</Label>
-                            <Input value={skill.name} onChange={e => handleChange('name', e.target.value)} placeholder="名称" />
+                            <Input value={skillState.name} onChange={e => handleChange('name', e.target.value)} placeholder="名称" />
                         </div>
                         <div className="grid gap-2">
                             <Label>種別</Label>
                             <div className="flex gap-2">
                                 <Input
-                                    value={skill.type}
+                                    value={skillState.type}
                                     onChange={e => handleChange('type', e.target.value)}
                                     placeholder="種別 (Active/Passive/Spell...)"
                                     className="flex-1"
                                 />
                                 <Select
-                                    value={['Active', 'Passive', 'Spell'].includes(skill.type || '') ? skill.type : undefined}
+                                    value={['Active', 'Passive', 'Spell'].includes(skillState.type) ? skillState.type : undefined}
                                     onValueChange={(val) => handleChange('type', val)}
                                 >
                                     <SelectTrigger className="w-[40px] px-2">
@@ -106,7 +193,7 @@ export const SkillEditorDialog: React.FC<SkillEditorDialogProps> = ({
                         <div className="grid gap-2">
                             <Label>習得種別</Label>
                             <Select
-                                value={skill.acquisitionType || 'Standard'}
+                                value={skillState.acquisitionType}
                                 onValueChange={(val) => handleChange('acquisitionType', val)}
                             >
                                 <SelectTrigger>
@@ -123,46 +210,46 @@ export const SkillEditorDialog: React.FC<SkillEditorDialogProps> = ({
 
                     <div className="grid gap-2">
                         <Label>概要 (フレーバーテキスト)</Label>
-                        <Input value={skill.description} onChange={e => handleChange('description', e.target.value)} />
+                        <Input value={skillState.description} onChange={e => handleChange('description', e.target.value)} />
                     </div>
 
                     <div className="grid gap-2">
                         <Label>効果 / 補正</Label>
-                        <Input value={skill.effect} onChange={e => handleChange('effect', e.target.value)} placeholder="攻撃+1, ダメージ軽減など" />
+                        <Input value={skillState.effect} onChange={e => handleChange('effect', e.target.value)} placeholder="攻撃+1, ダメージ軽減など" />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 border-t pt-4 mt-2">
                         <div className="grid gap-2">
                             <Label>タイミング</Label>
-                            <Input value={skill.timing} onChange={e => handleChange('timing', e.target.value)} />
+                            <Input value={skillState.timing} onChange={e => handleChange('timing', e.target.value)} />
                         </div>
                         <div className="grid gap-2">
                             <Label>判定 (Roll)</Label>
-                            <Input value={skill.rollModifier} onChange={e => handleChange('rollModifier', e.target.value)} placeholder="2d6+Str" />
+                            <Input value={skillState.rollModifier} onChange={e => handleChange('rollModifier', e.target.value)} placeholder="2d6+Str" />
                         </div>
                         <div className="grid gap-2">
                             <Label>対象</Label>
-                            <Input value={skill.target} onChange={e => handleChange('target', e.target.value)} />
+                            <Input value={skillState.target} onChange={e => handleChange('target', e.target.value)} />
                         </div>
                         <div className="grid gap-2">
                             <Label>射程</Label>
-                            <Input value={skill.range} onChange={e => handleChange('range', e.target.value)} />
+                            <Input value={skillState.range} onChange={e => handleChange('range', e.target.value)} />
                         </div>
                         <div className="grid gap-2">
                             <Label>コスト</Label>
-                            <Input value={skill.cost} onChange={e => handleChange('cost', e.target.value)} />
+                            <Input value={skillState.cost} onChange={e => handleChange('cost', e.target.value)} />
                         </div>
                         <div className="grid gap-2">
                             <Label>制限</Label>
-                            <Input value={skill.restriction} onChange={e => handleChange('restriction', e.target.value)} />
+                            <Input value={skillState.restriction} onChange={e => handleChange('restriction', e.target.value)} />
                         </div>
                     </div>
 
                     <div className="grid gap-2">
                         <Label>チャットパレット (任意)</Label>
                         <Textarea
-                            value={skill.chatPalette}
-                            onChange={e => handleChange('chatPalette', e.target.value)}
+                            value={skillState.chatPalette}
+                            onChange={(e) => handleChange('chatPalette', e.target.value)}
                             rows={3}
                         />
                     </div>
@@ -174,25 +261,26 @@ export const SkillEditorDialog: React.FC<SkillEditorDialogProps> = ({
                     {mode === 'add' ? (
                         <div className="flex gap-2 w-full sm:w-auto justify-end">
                             {(() => {
-                                const type = (skill.acquisitionType as 'Free' | 'Standard' | 'Grade') || 'Standard';
+                                const type = (skillState.acquisitionType as 'Free' | 'Standard' | 'Grade') || 'Standard';
                                 const costs = CharacterCalculator.calculateSkillCost(currentStandardSkills, type);
+                                const skillEntity = buildSkillEntity();
 
                                 if (type === 'Grade') {
                                     return (
                                         <>
                                             <Button
                                                 variant="secondary"
-                                                onClick={() => onAcquire?.(skill, 0, false)}
+                                                onClick={() => onAcquire?.(skillEntity, 0, false)}
                                             >
                                                 失敗 (初回 0)
                                             </Button>
                                             <Button
                                                 variant="secondary"
-                                                onClick={() => onAcquire?.(skill, 1, false)}
+                                                onClick={() => onAcquire?.(skillEntity, 1, false)}
                                             >
                                                 失敗 (再 1)
                                             </Button>
-                                            <Button onClick={() => onAcquire?.(skill, 0, true)}>
+                                            <Button onClick={() => onAcquire?.(skillEntity, 0, true)}>
                                                 成功 (0)
                                             </Button>
                                         </>
@@ -203,11 +291,11 @@ export const SkillEditorDialog: React.FC<SkillEditorDialogProps> = ({
                                         <>
                                             <Button
                                                 variant="secondary"
-                                                onClick={() => onAcquire?.(skill, costs.failure, false)}
+                                                onClick={() => onAcquire?.(skillEntity, costs.failure, false)}
                                             >
                                                 失敗 ({costs.failure})
                                             </Button>
-                                            <Button onClick={() => onAcquire?.(skill, costs.success, true)}>
+                                            <Button onClick={() => onAcquire?.(skillEntity, costs.success, true)}>
                                                 習得 ({costs.success})
                                             </Button>
                                         </>

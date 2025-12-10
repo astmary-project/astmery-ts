@@ -1,5 +1,6 @@
 import { CharacterCalculator } from '../../character/domain/CharacterCalculator';
-import { CharacterState } from '../../character/domain/CharacterLog';
+import { CharacterState } from '../../character/domain/models';
+import { Resource } from '../../character/domain/Resource';
 import { SessionLogEntry } from './SessionLog';
 
 export class SessionCalculator {
@@ -29,14 +30,29 @@ export class SessionCalculator {
             );
 
             // Implicit resource handling (HP/MP)
-            let resDef = resource;
+            let resDef: Resource | undefined = resource;
             if (!resDef && (normalizedId === 'HP' || normalizedId === 'MP')) {
-                const max = state.derivedStats[normalizedId] || 0;
-                resDef = { id: normalizedId, name: normalizedId, max, min: 0, initial: max };
+                const maxKey = normalizedId === 'HP' ? 'MaxHP' : 'MaxMP';
+                const max = state.derivedStats[maxKey] || 0;
+                resDef = {
+                    id: normalizedId,
+                    name: normalizedId,
+                    max: String(max),
+                    min: '0',
+                    initial: String(max),
+                    resetMode: 'initial'
+                };
             }
 
             if (resDef) {
-                const current = nextValues[resDef.id] ?? resDef.initial;
+                // Ensure helper to convert strings/formulas implicitly if needed for current values?
+                // currentValues are numbers.
+                const current = nextValues[resDef.id] ?? (
+                    // If initial is undefined, fallback to 0. But initial is string formula.
+                    // Does CharacterCalculator exposed an evaluate method for single formula? YES.
+                    CharacterCalculator.evaluateFormula(resDef.initial, state) || 0
+                );
+
                 let newValue = current;
 
                 // Helper to resolve value
@@ -53,11 +69,15 @@ export class SessionCalculator {
                 } else if (type === 'modify' && value !== undefined) {
                     newValue = current + resolvedVal;
                 } else if (type === 'reset') {
-                    newValue = resDef.initial;
+                    newValue = CharacterCalculator.evaluateFormula(resDef.initial, state);
                 }
 
                 // Clamp
-                newValue = Math.min(resDef.max, Math.max(resDef.min, newValue));
+                // Parse max/min as they are formulas
+                const maxVal = resDef.max !== undefined ? CharacterCalculator.evaluateFormula(resDef.max, state) : Infinity;
+                const minVal = resDef.min !== undefined ? CharacterCalculator.evaluateFormula(resDef.min, state) : -Infinity;
+
+                newValue = Math.min(maxVal, Math.max(minVal, newValue));
 
                 nextValues[resDef.id] = newValue;
                 return nextValues;
@@ -68,7 +88,7 @@ export class SessionCalculator {
             // Reset explicit resources
             state.resources.forEach(r => {
                 if (r.resetMode !== 'none') {
-                    nextValues[r.id] = r.initial;
+                    nextValues[r.id] = CharacterCalculator.evaluateFormula(r.initial, state);
                 }
             });
 
@@ -76,7 +96,8 @@ export class SessionCalculator {
             ['HP', 'MP'].forEach(key => {
                 const explicit = state.resources.find(r => r.id === key);
                 if (!explicit) {
-                    const max = state.derivedStats[key] || 0;
+                    const maxKey = key === 'HP' ? 'MaxHP' : 'MaxMP';
+                    const max = state.derivedStats[maxKey] || 0;
                     nextValues[key] = max;
                 }
             });

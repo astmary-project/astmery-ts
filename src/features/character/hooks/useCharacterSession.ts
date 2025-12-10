@@ -2,8 +2,8 @@ import { DiceRoller } from '@/domain/dice/DiceRoller';
 import { useEffect, useState } from 'react';
 import { SessionLogEntry } from '../../session';
 import { SessionCalculator } from '../../session/domain/SessionCalculator';
-import { CharacterState } from '../domain/CharacterLog';
 import { JAPANESE_TO_ENGLISH_STATS } from '../domain/constants';
+import { CharacterState } from '../domain/models';
 
 export const useCharacterSession = (state: CharacterState) => {
     // Ephemeral State (Session Scope)

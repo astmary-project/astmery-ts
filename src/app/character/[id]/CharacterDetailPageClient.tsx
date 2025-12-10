@@ -15,11 +15,12 @@ export function CharacterDetailPageClient({ currentUserId }: CharacterDetailPage
         name,
         character,
         state,
-        logs,
+        events, // Still destructured as logs? No, useCharacterSheet returns events
+
         isLoading,
         updateName,
-        addLog,
-        deleteLog,
+        addEvent,
+        deleteEvent,
         updateProfile,
         isEditMode,
         toggleEditMode,
@@ -47,9 +48,9 @@ export function CharacterDetailPageClient({ currentUserId }: CharacterDetailPage
                 onAvatarChange={(url) => updateProfile({ avatarUrl: url })}
                 character={character}
                 state={state}
-                logs={logs}
-                onAddLog={addLog}
-                onDeleteLog={deleteLog}
+                events={events} // Was logs
+                onAddEvent={addEvent} // Was addLog
+                onDeleteEvent={deleteEvent}
                 isEditMode={isEditMode}
                 onToggleEditMode={toggleEditMode}
                 onUpdateProfile={updateProfile}

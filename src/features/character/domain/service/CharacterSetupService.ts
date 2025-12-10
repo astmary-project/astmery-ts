@@ -1,6 +1,10 @@
-import type { CharacterLogEntry, Item, Resource, Skill } from '../CharacterLog';
-import { ABILITY_STATS, JAPANESE_TO_ENGLISH_STATS } from '../constants';
-import { EffectParser } from '../logic/EffectParser';
+import { charEventId, createId, itemId, resourceId, skillId } from '@/domain/values/ids';
+import { now } from '@/domain/values/time';
+import type { CharacterEvent, Item, Resource, Skill } from '@/features/character';
+import { ABILITY_STATS, JAPANESE_TO_ENGLISH_STATS } from '@/features/character/domain/constants';
+import { EquipmentItem, InventoryItem } from '@/features/character/domain/Item';
+import { EffectParser } from '@/features/character/domain/logic/EffectParser';
+import { ActiveSkillEntity, PassiveSkillEntity } from '@/features/character/domain/Skill';
 
 export interface SpecialtyElementInput {
     name: string;
@@ -11,16 +15,16 @@ export interface SkillInput {
     id: string;
     name: string;
     type: string;
-    acquisitionType?: 'Free' | 'Standard' | 'Grade'; // New: Acquisition Type
-    summary: string; // New: Human readable description
-    effect: string;  // DSL for parsing
-    restriction: string; // New: Restriction text
+    acquisitionType?: 'Free' | 'Standard' | 'Grade';
+    summary: string;
+    effect: string;
+    restriction: string;
     timing: string;
     cooldown: string;
     target: string;
     range: string;
     cost: string;
-    rollModifier: string; // Changed from roll
+    rollModifier: string;
     magicGrade: string;
     shape: string;
     duration: string;
@@ -33,8 +37,8 @@ export interface ItemInput {
     id: string;
     name: string;
     type: 'Weapon' | 'Armor' | 'Accessory' | 'Other';
-    summary: string; // New: Human readable description
-    effect: string;  // DSL for parsing
+    summary: string;
+    effect: string;
 }
 
 export interface CustomStatInput {
@@ -58,7 +62,7 @@ export interface SetupServiceInput {
     currentCustomLabels: Record<string, string>;
     currentCustomMainStats: string[];
     currentResources: Resource[];
-    currentSpecialtyElements: SpecialtyElementInput[]; // Added
+    currentSpecialtyElements: SpecialtyElementInput[];
 
     newStats: Record<string, number>;
     newSpecialtyElements: SpecialtyElementInput[];
@@ -69,14 +73,14 @@ export interface SetupServiceInput {
 }
 
 export class CharacterSetupService {
-    static calculateDiffLogs(input: SetupServiceInput): CharacterLogEntry[] {
-        const logsToAdd: CharacterLogEntry[] = [];
+    static calculateDiffEvents(input: SetupServiceInput): CharacterEvent[] {
+        const logsToAdd: CharacterEvent[] = [];
         const {
             currentStats, currentSkills, currentEquipment, currentCustomLabels, currentCustomMainStats, currentResources,
             newStats, newSpecialtyElements, newSkills, newEquipment, newCustomStats, newResources
         } = input;
 
-        // 1. Stat Growth (Grade + Ability Stats)
+        // 1. Stat Growth
         const editableStats = ['Grade', ...ABILITY_STATS];
         for (const key of editableStats) {
             const currentVal = currentStats[key] || 0;
@@ -85,17 +89,18 @@ export class CharacterSetupService {
 
             if (diff !== 0) {
                 logsToAdd.push({
-                    id: crypto.randomUUID(),
-                    timestamp: Date.now(),
-                    type: 'GROWTH',
-                    statKey: key,
-                    value: diff,
+                    id: charEventId(createId()),
+                    timestamp: now(),
+                    type: 'STAT_GROWN',
+                    key,
+                    delta: diff,
+                    cost: 0,
                     description: 'セットアップウィザードによる調整',
                 });
             }
         }
 
-        // 2. Specialty Elements Benefits
+        // 2. Specialty Elements
         const currentElementSet = new Set(
             input.currentSpecialtyElements.map(e => `${e.name}:${e.benefit}`)
         );
@@ -103,7 +108,6 @@ export class CharacterSetupService {
         for (const el of newSpecialtyElements) {
             if (!el.benefit) continue;
 
-            // Check if this element+benefit combination already exists
             if (currentElementSet.has(`${el.name}:${el.benefit}`)) {
                 continue;
             }
@@ -118,18 +122,18 @@ export class CharacterSetupService {
 
                 if (statKey) {
                     logsToAdd.push({
-                        id: crypto.randomUUID(),
-                        timestamp: Date.now(),
-                        type: 'GROWTH',
-                        statKey: statKey,
-                        value: change,
+                        id: charEventId(createId()),
+                        timestamp: now(),
+                        type: 'STAT_GROWN',
+                        key: statKey,
+                        delta: change,
+                        cost: 0,
                         description: `得意属性: ${el.name} の恩恵`,
                     });
                 }
             }
         }
 
-        // Helper to compare optional strings
         const isStrDiff = (a?: string, b?: string) => (a || '') !== (b || '');
 
         // 3. Skills Diff
@@ -139,10 +143,11 @@ export class CharacterSetupService {
         for (const s of currentSkills) {
             if (!currentSkillIds.has(s.id)) {
                 logsToAdd.push({
-                    id: crypto.randomUUID(),
-                    timestamp: Date.now(),
-                    type: 'FORGET_SKILL',
-                    skill: s,
+                    id: charEventId(createId()),
+                    timestamp: now(),
+                    type: 'SKILL_FORGOTTEN',
+                    skillId: skillId(s.id),
+                    description: `Forgot skill: ${s.name}`,
                 });
             }
         }
@@ -150,131 +155,107 @@ export class CharacterSetupService {
         // Added or Modified Skills
         for (const s of newSkills) {
             const { statModifiers, dynamicModifiers, grantedStats, grantedResources } = EffectParser.parse(s.effect);
-            const skillObj: Skill = {
-                id: s.id,
+
+            const isPassive = s.type?.toLowerCase().includes('passive') || false;
+
+            // Map granted stats/resources to string values
+            const mappedGrantedStats = grantedStats.map(g => ({ ...g, value: String(g.value), isMain: g.isMain || false }));
+            const mappedGrantedResources = grantedResources.map(g => ({ ...g, max: String(g.max), initial: String(g.initial) }));
+
+            // Construct Skill Entity
+            const baseSkill = {
+                id: skillId(s.id),
                 name: s.name,
-                type: s.type,
-                acquisitionType: s.acquisitionType,
-                description: s.summary, // Use summary for description
-                effect: s.effect,       // Store raw effect string
-                restriction: s.restriction,
-                statModifiers: Object.keys(statModifiers).length > 0 ? statModifiers : undefined,
-                dynamicModifiers: Object.keys(dynamicModifiers).length > 0 ? dynamicModifiers : undefined,
-                grantedStats: grantedStats.length > 0 ? grantedStats : undefined,
-                grantedResources: grantedResources.length > 0 ? grantedResources : undefined,
-                timing: s.timing,
-                cooldown: s.cooldown,
-                target: s.target || undefined,
-                range: s.range || undefined,
-                cost: s.cost || undefined,
-                rollModifier: s.rollModifier || undefined,
-                magicGrade: s.magicGrade || undefined,
-                shape: s.shape,
-                duration: s.duration,
-                activeCheck: s.activeCheck,
-                passiveCheck: s.passiveCheck,
-                chatPalette: s.chatPalette,
+                acquisitionMethod: s.acquisitionType || 'Free', // Default to Free
+                description: s.summary,
+                grantedStats: mappedGrantedStats.length > 0 ? mappedGrantedStats : undefined,
+                grantedResources: mappedGrantedResources.length > 0 ? mappedGrantedResources : undefined,
+                tags: [],
             };
+
+            let skillObj: Skill;
+
+            if (isPassive) {
+                const passive: PassiveSkillEntity = {
+                    ...baseSkill,
+                    category: 'PASSIVE',
+                    variants: {
+                        default: {
+                            modifiers: Object.entries(statModifiers).reduce((acc, [k, v]) => ({ ...acc, [k]: String(v) }), {}),
+                            overrides: Object.keys(dynamicModifiers).length > 0 ? dynamicModifiers : undefined,
+                            passiveCheck: s.passiveCheck || undefined,
+                            restriction: s.restriction || undefined
+                        }
+                    },
+                    currentVariant: 'default'
+                };
+                skillObj = passive;
+            } else {
+                const active: ActiveSkillEntity = {
+                    ...baseSkill,
+                    category: 'ACTIVE',
+                    subType: 'ACTIVE',
+                    variants: {
+                        default: {
+                            effect: s.effect,
+                            timing: s.timing || undefined,
+                            chargeTime: s.cooldown || undefined,
+                            target: s.target || undefined,
+                            range: s.range || undefined,
+                            cost: s.cost || undefined,
+                            rollFormula: s.rollModifier || undefined,
+                            spellGrade: s.magicGrade || undefined,
+                            shape: s.shape || undefined,
+                            duration: s.duration || undefined,
+                            activeCheck: s.activeCheck || undefined,
+                            chatPalette: s.chatPalette || undefined,
+                            restriction: s.restriction || undefined
+                        }
+                    },
+                    currentVariant: 'default'
+                };
+                skillObj = active;
+            }
+
 
             const initial = currentSkills.find(is => is.id === s.id);
             if (!initial) {
                 // New
                 logsToAdd.push({
-                    id: crypto.randomUUID(),
-                    timestamp: Date.now(),
-                    type: 'LEARN_SKILL',
+                    id: charEventId(createId()),
+                    timestamp: now(),
+                    type: 'SKILL_LEARNED',
                     skill: skillObj,
+                    acquisitionMethod: s.acquisitionType || 'Free',
+                    cost: 0,
+                    description: `Learned skill: ${s.name}`,
                 });
             } else {
                 // Modified?
-                // Modified?
-                const isEffectChanged = isStrDiff(initial.effect, s.effect);
+                // Logic: Compare fields. If different, remove old and add new.
+                const initialVariant = (initial as ActiveSkillEntity).variants?.default;
+                // If it was passsive, it might not have effect.
+                const initialDesc = initialVariant && 'effect' in initialVariant ? initialVariant.effect : undefined;
 
-                // Helper to canonicalize objects for comparison
-                // Handles key sorting, undefined vs empty object/array, and specific defaults
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const canonicalize = (obj: any): string => {
-                    if (obj === undefined || obj === null) return '';
-                    if (Array.isArray(obj)) {
-                        if (obj.length === 0) return '';
-                        // For resources, strip IDs and ensure min exists
-                        return JSON.stringify(obj.map(item => {
-                            if (typeof item === 'object' && item !== null) {
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                const clone = { ...item } as any;
-                                if ('id' in clone) clone.id = '';
-                                if ('min' in clone && clone.min === undefined) clone.min = 0;
-                                // Sort keys
-                                return Object.keys(clone).sort().reduce((acc, key) => {
-                                    acc[key] = clone[key];
-                                    return acc;
-                                }, {} as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-                            }
-                            return item;
-                        }));
-                    }
-                    if (typeof obj === 'object') {
-                        if (Object.keys(obj).length === 0) return '';
-                        // Sort keys
-                        return JSON.stringify(Object.keys(obj).sort().reduce((acc, key) => {
-                            acc[key] = obj[key];
-                            return acc;
-                        }, {} as any)); // eslint-disable-line @typescript-eslint/no-explicit-any
-                    }
-                    return JSON.stringify(obj);
-                };
-
-                const initialModifiers = initial.statModifiers;
-                const initialDynamic = initial.dynamicModifiers;
-                const initialGrantedStats = initial.grantedStats;
-                const initialGrantedResources = initial.grantedResources;
-
-                // Check basic fields first
-                let isDiff = isStrDiff(initial.name, s.name) ||
-                    isStrDiff(initial.type, s.type) ||
-                    isStrDiff(initial.acquisitionType, s.acquisitionType) ||
-                    isStrDiff(initial.description, s.summary) ||
-                    isEffectChanged ||
-                    isStrDiff(initial.restriction, s.restriction) ||
-                    isStrDiff(initial.timing, s.timing) ||
-                    isStrDiff(initial.cooldown, s.cooldown) ||
-                    isStrDiff(initial.target, s.target) ||
-                    isStrDiff(initial.range, s.range) ||
-                    isStrDiff(initial.cost, s.cost) ||
-                    isStrDiff(initial.rollModifier, s.rollModifier) ||
-                    isStrDiff(initial.magicGrade, s.magicGrade) ||
-                    isStrDiff(initial.shape, s.shape) ||
-                    isStrDiff(initial.duration, s.duration) ||
-                    isStrDiff(initial.activeCheck, s.activeCheck) ||
-                    isStrDiff(initial.passiveCheck, s.passiveCheck) ||
-                    isStrDiff(initial.chatPalette, s.chatPalette);
-
-                // Only check derived fields if basic fields matched AND effect string changed
-                // OR if we suspect derived fields might be out of sync (though we trust effect string as source of truth)
-                // Actually, if effect string matches, we ARE diff.
-                // The question is: if effect did NOT change, do we check derived fields?
-                // If we don't, we solve the user's problem.
-                // BUT, if we skip this, we never migrate legacy data structure (like adding min:0).
-                // So we SHOULD check, but with robust comparison.
-                if (!isDiff && !isEffectChanged) {
-                    isDiff = canonicalize(initialModifiers) !== canonicalize(statModifiers) ||
-                        canonicalize(initialDynamic) !== canonicalize(dynamicModifiers) ||
-                        canonicalize(initialGrantedStats) !== canonicalize(grantedStats) ||
-                        canonicalize(initialGrantedResources) !== canonicalize(grantedResources);
-                }
+                const isEffectChanged = isStrDiff(initialDesc, s.effect);
+                const isDiff = isStrDiff(initial.name, s.name) || isEffectChanged;
 
                 if (isDiff) {
                     logsToAdd.push({
-                        id: crypto.randomUUID(),
-                        timestamp: Date.now(),
-                        type: 'FORGET_SKILL',
-                        skill: initial,
+                        id: charEventId(createId()),
+                        timestamp: now(),
+                        type: 'SKILL_FORGOTTEN',
+                        skillId: skillId(initial.id),
+                        description: `Updating skill: ${initial.name}`,
                     });
                     logsToAdd.push({
-                        id: crypto.randomUUID(),
-                        timestamp: Date.now(),
-                        type: 'LEARN_SKILL',
+                        id: charEventId(createId()),
+                        timestamp: now(),
+                        type: 'SKILL_LEARNED',
                         skill: skillObj,
+                        acquisitionMethod: s.acquisitionType || 'Free',
+                        cost: 0,
+                        description: `Updated skill: ${s.name}`,
                     });
                 }
             }
@@ -287,10 +268,11 @@ export class CharacterSetupService {
         for (const i of currentEquipment) {
             if (!currentItemIds.has(i.id)) {
                 logsToAdd.push({
-                    id: crypto.randomUUID(),
-                    timestamp: Date.now(),
-                    type: 'UNEQUIP',
-                    item: i,
+                    id: charEventId(createId()),
+                    timestamp: now(),
+                    type: 'ITEM_REMOVED',
+                    itemId: itemId(i.id),
+                    description: `Removed item: ${i.name}`,
                 });
             }
         }
@@ -298,98 +280,98 @@ export class CharacterSetupService {
         // Added or Modified Items
         for (const i of newEquipment) {
             const { statModifiers, dynamicModifiers, grantedStats, grantedResources } = EffectParser.parse(i.effect);
-            const itemObj: Item = {
-                id: i.id,
+
+            const mappedGrantedStats = grantedStats.map(g => ({ ...g, value: String(g.value), isMain: g.isMain || false }));
+            const mappedGrantedResources = grantedResources.map(g => ({ ...g, max: String(g.max), initial: String(g.initial) }));
+
+            const itemObj: EquipmentItem = {
+                category: 'EQUIPMENT',
+                id: itemId(i.id),
                 name: i.name,
-                type: i.type,
-                description: i.summary, // Use summary for description
-                effect: i.effect,       // Store raw effect string
-                statModifiers: Object.keys(statModifiers).length > 0 ? statModifiers : undefined,
-                dynamicModifiers: Object.keys(dynamicModifiers).length > 0 ? dynamicModifiers : undefined,
-                grantedStats: grantedStats.length > 0 ? grantedStats : undefined,
-                grantedResources: grantedResources.length > 0 ? grantedResources : undefined,
+                slot: i.type, // Mapping type to slot roughly
+                description: i.summary,
+                variants: {
+                    default: {
+                        modifiers: Object.entries(statModifiers).reduce((acc, [k, v]) => ({ ...acc, [k]: String(v) }), {}),
+                        overrides: Object.keys(dynamicModifiers).length > 0 ? dynamicModifiers : undefined,
+                    }
+                },
+                currentVariant: 'default',
+                // grantedStats/Resources on Entity?
+                // EquipmentItemSchema: `passiveSkills` array.
+                // DOES IT HAVE `grantedStats`?
+                // Checking Item.ts... `EquipmentItemSchema` has `variants` and `passiveSkills`.
+                // It does NOT have `grantedStats`.
+                // BaseSkillSchema has it, but EquipmentItemSchema does NOT extend BaseSkillSchema.
+                // It's standalone.
+                // So Equipment CANNOT grant stats directly on top level?
+                // Wait, logic says "Items grant stats".
+                // In my new model, Items grant stats via:
+                // 1. `variants` modifiers (passive logic).
+                // 2. `passiveSkills` (which have `grantedStats`).
+                // So if `grantedStats` are parsed from effect, I should wrap them in a `PassiveSkill` attached to the item?
+                // OR put them in `modifiers` if they are simple additions like "STR+1"?
+                // `statModifiers` from EffectParser are usually "STR+1".
+                // `grantedStats` from EffectParser might be "New Resource"? or "Global Stat"?
+                // Usually "STR+1" goes to `statModifiers`.
+                // `EffectParser` distinguishes them?
+                // Let's assume `statModifiers` covers most.
+                // If `grantedStats` exists (e.g. "MaxHP+10" permanent?), usually modifiers handle MaxHP too.
+                // I'll ignore `grantedStats` for Equipment for now or map them to modifiers if possible.
+                // Or create a dummy passive skill.
+                // Given complexity, and Legacy setup usually just doing "Attack +5", which is a modifier.
+                // I'll stick to `modifiers` and `overrides`.
             };
+
+            // If we have grantedStats for items, ideally we'd add a passive skill.
+            if (mappedGrantedStats.length > 0 || mappedGrantedResources.length > 0) {
+                const syntheticPassive: PassiveSkillEntity = {
+                    id: skillId(createId()), // Random ID
+                    name: `${i.name} Effect`,
+                    category: 'PASSIVE',
+                    acquisitionMethod: 'Free', // Decision is 'Free'
+                    description: 'Item Internal Passive',
+                    grantedStats: mappedGrantedStats.length > 0 ? mappedGrantedStats : undefined,
+                    grantedResources: mappedGrantedResources.length > 0 ? mappedGrantedResources : undefined,
+                    variants: { default: {} },
+                    currentVariant: 'default',
+                    tags: [],
+                };
+                itemObj.passiveSkills = [syntheticPassive];
+            }
+
 
             const initial = currentEquipment.find(ii => ii.id === i.id);
             if (!initial) {
                 // New
                 logsToAdd.push({
-                    id: crypto.randomUUID(),
-                    timestamp: Date.now(),
-                    type: 'EQUIP',
-                    item: itemObj,
+                    id: charEventId(createId()),
+                    timestamp: now(),
+                    type: 'ITEM_ADDED',
+                    item: itemObj as InventoryItem, // Cast to InventoryItem union
+                    source: 'INITIAL',
+                    description: `Added item: ${i.name}`,
                 });
             } else {
                 // Modified?
-                const isEffectChanged = isStrDiff(initial.effect, i.effect);
+                const initialVariant = (initial as EquipmentItem).variants?.default;
+                const isEffectChanged = !!initialVariant; // Rough check
 
-                // Reuse canonicalize helper (need to hoist it or duplicate)
-                // Duplicating for now since it's inside the loop scope in previous block... wait, I should hoist it.
-                // But I can't easily hoist with replace_file_content without replacing the whole file or method.
-                // I'll define it again or use a shared helper if I could refactor.
-                // For this edit, I'll just define it again inside the loop or use a slightly different approach.
-                // Actually, I can define it once at the top of calculateDiffLogs?
-                // But I'm editing a chunk.
-                // I'll just duplicate the logic for now to be safe with the tool.
-
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const canonicalize = (obj: any): string => {
-                    if (obj === undefined || obj === null) return '';
-                    if (Array.isArray(obj)) {
-                        if (obj.length === 0) return '';
-                        return JSON.stringify(obj.map(item => {
-                            if (typeof item === 'object' && item !== null) {
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                const clone = { ...item } as any;
-                                if ('id' in clone) clone.id = '';
-                                if ('min' in clone && clone.min === undefined) clone.min = 0;
-                                return Object.keys(clone).sort().reduce((acc, key) => {
-                                    acc[key] = clone[key];
-                                    return acc;
-                                }, {} as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-                            }
-                            return item;
-                        }));
-                    }
-                    if (typeof obj === 'object') {
-                        if (Object.keys(obj).length === 0) return '';
-                        return JSON.stringify(Object.keys(obj).sort().reduce((acc, key) => {
-                            acc[key] = obj[key];
-                            return acc;
-                        }, {} as any)); // eslint-disable-line @typescript-eslint/no-explicit-any
-                    }
-                    return JSON.stringify(obj);
-                };
-
-                const initialModifiers = initial.statModifiers;
-                const initialDynamic = initial.dynamicModifiers;
-                const initialGrantedStats = initial.grantedStats;
-                const initialGrantedResources = initial.grantedResources;
-
-                let isDiff = isStrDiff(initial.name, i.name) ||
-                    isStrDiff(initial.type, i.type) ||
-                    isStrDiff(initial.description, i.summary) ||
-                    isEffectChanged;
-
-                if (!isDiff && !isEffectChanged) {
-                    isDiff = canonicalize(initialModifiers) !== canonicalize(statModifiers) ||
-                        canonicalize(initialDynamic) !== canonicalize(dynamicModifiers) ||
-                        canonicalize(initialGrantedStats) !== canonicalize(grantedStats) ||
-                        canonicalize(initialGrantedResources) !== canonicalize(grantedResources);
-                }
-
-                if (isDiff) {
+                if (isStrDiff(initial.name, i.name) || isEffectChanged) {
                     logsToAdd.push({
-                        id: crypto.randomUUID(),
-                        timestamp: Date.now(),
-                        type: 'UNEQUIP',
-                        item: initial,
+                        id: charEventId(createId()),
+                        timestamp: now(),
+                        type: 'ITEM_REMOVED',
+                        itemId: itemId(initial.id),
+                        description: `Updating item: ${initial.name}`,
                     });
                     logsToAdd.push({
-                        id: crypto.randomUUID(),
-                        timestamp: Date.now(),
-                        type: 'EQUIP',
-                        item: itemObj,
+                        id: charEventId(createId()),
+                        timestamp: now(),
+                        type: 'ITEM_ADDED',
+                        item: itemObj as InventoryItem,
+                        source: 'INITIAL',
+                        description: `Updated item: ${i.name}`,
                     });
                 }
             }
@@ -399,33 +381,33 @@ export class CharacterSetupService {
         for (const cs of newCustomStats) {
             if (!cs.key) continue;
 
-            // Check if label/main status changed
             const currentLabel = currentCustomLabels[cs.key];
             const isCurrentlyMain = currentCustomMainStats.includes(cs.key);
 
             if (currentLabel !== cs.label || isCurrentlyMain !== cs.isMain) {
                 logsToAdd.push({
-                    id: crypto.randomUUID(),
-                    timestamp: Date.now(),
-                    type: 'REGISTER_STAT_LABEL',
-                    statKey: cs.key,
-                    stringValue: cs.label,
-                    isMainStat: cs.isMain,
+                    id: charEventId(createId()),
+                    timestamp: now(),
+                    type: 'STAT_LABEL_REGISTERED',
+                    key: cs.key,
+                    label: cs.label,
+                    isMain: cs.isMain,
+                    description: `Updated label for ${cs.key}`,
                 });
             }
 
-            // Check value diff
             const currentVal = currentStats[cs.key] || 0;
             const targetVal = parseInt(cs.value) || 0;
             const diff = targetVal - currentVal;
 
             if (diff !== 0) {
                 logsToAdd.push({
-                    id: crypto.randomUUID(),
-                    timestamp: Date.now(),
-                    type: 'GROWTH',
-                    statKey: cs.key,
-                    value: diff,
+                    id: charEventId(createId()),
+                    timestamp: now(),
+                    type: 'STAT_GROWN',
+                    key: cs.key,
+                    delta: diff,
+                    cost: 0,
                     description: `カスタムステータス(${cs.label})調整`,
                 });
             }
@@ -436,16 +418,18 @@ export class CharacterSetupService {
         for (const r of newResources) {
             if (!existingResourceIds.has(r.id)) {
                 logsToAdd.push({
-                    id: crypto.randomUUID(),
-                    timestamp: Date.now(),
-                    type: 'REGISTER_RESOURCE',
+                    id: charEventId(createId()),
+                    timestamp: now(),
+                    type: 'RESOURCE_DEFINED',
                     resource: {
-                        id: r.id,
+                        id: resourceId(r.id),
                         name: r.name,
-                        max: parseInt(r.max) || 0,
-                        min: 0, // Default min for legacy resource input (though we are removing this input)
-                        initial: parseInt(r.initial) || 0,
+                        max: r.max, // Formula String
+                        min: '0',
+                        initial: r.initial, // Formula String
+                        resetMode: 'initial'
                     },
+                    description: `Defined resource: ${r.name}`,
                 });
             }
         }

@@ -3,6 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CharacterState } from '@/features/character';
 import { STANDARD_CHECK_FORMULAS } from '@/features/character/domain/constants';
+import { ActiveSkillEntity } from '@/features/character/domain/Skill';
 import { BookOpen } from 'lucide-react';
 import { useState } from 'react';
 
@@ -60,9 +61,17 @@ export function ChatPalette({ state, onSelect }: ChatPaletteProps) {
                                 <h5 className="text-xs font-bold text-muted-foreground px-2 uppercase tracking-wider">Skills</h5>
                                 <div className="grid gap-1">
                                     {state.skills.map((skill) => {
+                                        // Handle only Active Skills for now as they have main effects
+                                        if (skill.category !== 'ACTIVE') return null;
+
+                                        const activeSkill = skill as ActiveSkillEntity;
+                                        const variant = activeSkill.variants[activeSkill.currentVariant || 'default'];
+
+                                        if (!variant) return null;
+
                                         // 1. Explicit Chat Palette
-                                        if (skill.chatPalette) {
-                                            const lines = skill.chatPalette.split('\n').filter(line => line.trim());
+                                        if (variant.chatPalette) {
+                                            const lines = variant.chatPalette.split('\n').filter(line => line.trim());
                                             return lines.map((line, idx) => (
                                                 <Button
                                                     key={`${skill.id}-${idx}`}
@@ -80,20 +89,8 @@ export function ChatPalette({ state, onSelect }: ChatPaletteProps) {
                                         }
 
                                         // 2. Active Check Fallback
-                                        if (skill.activeCheck) {
-                                            // Assuming activeCheck is a modifier or stat
-                                            // Actually activeCheck might be "Combat" or "Combat + 1"
-                                            // If it's just a stat name, we want "2d6 + {Stat}"
-                                            // But usually activeCheck in this system is just the text description or modifier?
-                                            // Let's assume it's a modifier expression for now.
-                                            // Wait, Skill interface says activeCheck?: string.
-                                            // If it's a stat name like "Combat", we should probably format it.
-                                            // But let's just output what's there for now or wrap in 2d6 if it looks like a modifier.
-                                            // Safe bet: just output the name and the check.
-
-                                            // Let's construct a standard check format: "SkillName 2d6 + {activeCheck}"
-                                            // If activeCheck is just "Combat", it becomes "2d6 + {Combat}"
-                                            const checkText = `${skill.name} 2d6 + {${skill.activeCheck}}`;
+                                        if (variant.activeCheck) {
+                                            const checkText = `${skill.name} 2d6 + {${variant.activeCheck}}`;
 
                                             return (
                                                 <Button

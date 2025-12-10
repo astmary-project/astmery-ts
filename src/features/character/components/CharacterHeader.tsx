@@ -11,7 +11,7 @@ import { ArrowLeft, Pencil, Settings } from 'lucide-react';
 import Link from 'next/link';
 import React, { useEffect, useState } from 'react';
 import { CharacterCalculator } from '../domain/CharacterCalculator';
-import { CharacterState } from '../domain/CharacterLog';
+import { CharacterState } from '../domain/models';
 import { GrowthDialog } from './sheet/GrowthDialog';
 
 interface CharacterHeaderProps {

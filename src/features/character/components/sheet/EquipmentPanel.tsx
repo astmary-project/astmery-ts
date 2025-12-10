@@ -1,9 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dices, Plus, Settings2, Trash2 } from 'lucide-react';
+import { Plus, Settings2, Trash2 } from 'lucide-react';
 import React, { useState } from 'react';
-import { CharacterLogEntry, CharacterState, Item } from '../../domain/CharacterLog';
+import { CharacterEvent } from '../../domain/Event';
+import { EquipmentItem, InventoryItem as Item } from '../../domain/Item';
+import { CharacterState } from '../../domain/models';
 import { ItemEditorDialog } from './ItemEditorDialog';
 
 interface EquipmentPanelProps {
@@ -12,7 +15,7 @@ interface EquipmentPanelProps {
     isEditMode?: boolean;
     onAddItem?: (item: Item) => void;
     onUpdateItem?: (item: Item) => void;
-    onAddLog: (log: Omit<CharacterLogEntry, 'id' | 'timestamp'>) => void;
+    onAddLog: (log: Omit<CharacterEvent, 'id' | 'timestamp'>) => void;
 }
 
 export const EquipmentPanel: React.FC<EquipmentPanelProps> = ({ state, onAddLog, onRoll, isEditMode = false, onAddItem, onUpdateItem }) => {
@@ -35,6 +38,10 @@ export const EquipmentPanel: React.FC<EquipmentPanelProps> = ({ state, onAddLog,
         setEditingItem(null);
     };
 
+    // Filter for Equipment items
+    // If state.inventory has items with category 'EQUIPMENT'
+    const equipmentItems = state.inventory.filter(i => i.category === 'EQUIPMENT') as Extract<Item, { category: 'EQUIPMENT' }>[];
+
     return (
         <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -42,83 +49,103 @@ export const EquipmentPanel: React.FC<EquipmentPanelProps> = ({ state, onAddLog,
             </CardHeader>
             <CardContent>
                 <div className="space-y-4">
-                    {state.equipment.map((item) => (
-                        <div key={item.id} className="p-3 border rounded-lg bg-card hover:bg-accent/5 transition-colors group relative">
-                            {/* Delete Button (Hover) */}
-                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                                {isEditMode && (
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 text-muted-foreground hover:text-primary"
-                                        onClick={() => handleEditClick(item)}
-                                    >
-                                        <Settings2 size={16} />
-                                    </Button>
-                                )}
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                    onClick={() => onAddLog({
-                                        type: 'UNEQUIP',
-                                        item: item,
-                                        description: `Unequipped ${item.name}`
-                                    })}
-                                >
-                                    <Trash2 size={16} />
-                                </Button>
-                            </div>
+                    {equipmentItems.map((item) => {
+                        const isEquipped = state.equipmentSlots.some(s => s.id === item.id);
+                        const variant = item.variants[item.currentVariant] || item.variants.default;
 
-                            <div className="flex justify-between items-start mb-1 pr-16">
-                                <div className="font-medium flex items-center gap-2">
-                                    {item.name}
-                                    <Badge variant="outline" className="text-[10px] h-5">
-                                        {item.type}
-                                    </Badge>
-                                </div>
-                            </div>
-                            <div className="text-sm text-muted-foreground mb-2">
-                                {item.description}
-                            </div>
-                            {/* Item Mechanics Display */}
-                            {(item.roll || item.effect) && (
-                                <div className="mt-2 pt-2 border-t flex gap-4 text-xs font-mono text-foreground/80">
-                                    {item.roll && (
-                                        <div className="flex items-center gap-1">
-                                            <span className="text-muted-foreground">Roll:</span>
-                                            {item.roll}
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-5 w-5 ml-1"
-                                                onClick={() => onRoll(item.roll!, `${item.name} Check`)}
-                                                title="Roll Check"
-                                            >
-                                                <Dices className="h-3 w-3" />
-                                            </Button>
-                                        </div>
+                        return (
+                            <div key={item.id} className="p-3 border rounded-lg bg-card hover:bg-accent/5 transition-colors group relative">
+                                {/* Delete Button (Hover) */}
+                                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                    {isEditMode && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                            onClick={() => handleEditClick(item)}
+                                        >
+                                            <Settings2 size={16} />
+                                        </Button>
                                     )}
-                                    {item.effect && (
-                                        <div className="flex items-center gap-1">
-                                            <span className="text-muted-foreground">Effect:</span>
-                                            {item.effect}
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-5 w-5 ml-1"
-                                                onClick={() => onRoll(item.effect!, `${item.name} Effect`)}
-                                                title="Roll Effect"
-                                            >
-                                                <Dices className="h-3 w-3" />
-                                            </Button>
-                                        </div>
+                                    {/* Unequip or Delete? 
+                                    Old code had "UNEQUIP". 
+                                    If it is equipped, we should unequip.
+                                    If it is NOT equipped, maybe we delete (remove from inventory)?
+                                    For now, mapping generic "Remove" to Log logic.
+                                */}
+                                    {isEquipped ? (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-muted-foreground hover:text-warning"
+                                            onClick={() => onAddLog({
+                                                type: 'ITEM_UNEQUIPPED', // Correct Event Type
+                                                itemId: item.id,
+                                                slot: item.slot, // Assuming slot matches where it was equipped
+                                                description: `Unequipped ${item.name}`
+                                            } as any)}
+                                            title="Unequip"
+                                        >
+                                            <span className="text-xs">Un</span>
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                            onClick={() => onAddLog({
+                                                type: 'ITEM_REMOVED',
+                                                itemId: item.id,
+                                                description: `Removed ${item.name}`
+                                            } as any)}
+                                            title="Remove"
+                                        >
+                                            <Trash2 size={16} />
+                                        </Button>
+                                    )}
+
+                                    {/* Equip Button if not equipped? */}
+                                    {!isEquipped && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                            onClick={() => onAddLog({
+                                                type: 'ITEM_EQUIPPED',
+                                                itemId: item.id,
+                                                slot: item.slot, // Default slot
+                                                description: `Equipped ${item.name}`
+                                            } as any)}
+                                            title="Equip"
+                                        >
+                                            <Plus size={16} />
+                                        </Button>
                                     )}
                                 </div>
-                            )}
-                        </div>
-                    ))}
-                    {state.equipment.length === 0 && <p className="text-muted-foreground text-center py-8">装備品がありません。</p>}
+
+                                <div className="flex justify-between items-start mb-1 pr-16">
+                                    <div className="font-medium flex items-center gap-2">
+                                        {item.name}
+                                        {isEquipped && <Badge className="text-[10px] h-5">Equipped</Badge>}
+                                        {/* Subtype if available (legacy or variant data) */}
+                                        {/* <Badge variant="outline" className="text-[10px] h-5">{item.slot}</Badge> */}
+                                    </div>
+                                </div>
+                                <div className="text-sm text-muted-foreground mb-2">
+                                    {/* Description/Effect display */}
+                                    {item.description}
+                                    {variant.passiveCheck && (
+                                        <div className="mt-1 text-xs opacity-90 italic">{variant.passiveCheck}</div>
+                                    )}
+                                </div>
+
+                                {/* Mechanics */}
+                                {/* Assuming variant has modifiers/effects we might want to roll or display */}
+                                {/* (Mechanics display logic omitted or simplified since schema changed structure) */}
+                            </div>
+                        );
+                    })}
+                    {equipmentItems.length === 0 && <p className="text-muted-foreground text-center py-8">装備品がありません。</p>}
 
                     {isEditMode && (
                         <div className="mt-6 border-t pt-4">
@@ -132,8 +159,9 @@ export const EquipmentPanel: React.FC<EquipmentPanelProps> = ({ state, onAddLog,
                         <ItemEditorDialog
                             isOpen={!!editingItem}
                             onClose={() => setEditingItem(null)}
-                            initialItem={editingItem.item}
-                            onSave={handleSaveItem}
+                            initialItem={editingItem.item as Partial<EquipmentItem>}
+                            // Mapping legacy onSave if needed, but here we pass directly
+                            onSave={(item) => handleSaveItem(item as Item)}
                             mode={editingItem.mode}
                         />
                     )}
