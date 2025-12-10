@@ -18,7 +18,7 @@ interface EquipmentPanelProps {
     onAddLog: (log: Omit<CharacterEvent, 'id' | 'timestamp'>) => void;
 }
 
-export const EquipmentPanel: React.FC<EquipmentPanelProps> = ({ state, onAddLog, onRoll, isEditMode = false, onAddItem, onUpdateItem }) => {
+export const EquipmentPanel: React.FC<EquipmentPanelProps> = ({ state, onAddLog, isEditMode = false, onAddItem, onUpdateItem }) => {
     const [editingItem, setEditingItem] = useState<{ item: Partial<Item>; mode: 'add' | 'edit' } | null>(null);
 
     const handleAddClick = () => {

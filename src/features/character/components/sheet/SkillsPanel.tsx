@@ -2,7 +2,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { now } from '@/domain/values/time';
 import { Plus, Settings2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { CharacterEvent } from '../../domain/Event';
@@ -20,7 +19,7 @@ interface SkillsPanelProps {
     onAddLog: (log: Omit<CharacterEvent, 'id' | 'timestamp'>) => void;
 }
 
-export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAddSkill, onUpdateSkill }: SkillsPanelProps) => {
+export const SkillsPanel = ({ state, onAddLog, isEditMode = false, onAddSkill, onUpdateSkill }: SkillsPanelProps) => {
     const [editingSkill, setEditingSkill] = useState<{ skill: Partial<Skill>; mode: 'add' | 'edit' | 'wishlist_add' | 'wishlist_edit' } | null>(null);
     const [acquiringSkill, setAcquiringSkill] = useState<Skill | null>(null);
 
@@ -33,7 +32,7 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
     };
 
     const handleSaveSkill = (skill: Partial<Skill>) => {
-        const timestamp = now();
+
         // Generates a mock ID for wishlist purposes if needed, though onAddLog usually handles ID in parent or Factory
         // But here we construct raw objects for wishlist events
 
@@ -223,7 +222,7 @@ export const SkillsPanel = ({ state, onAddLog, onRoll, isEditMode = false, onAdd
 
                 {/* Dynamically render skill sections based on categories */}
                 {(() => {
-                    const standardCategory = ['ACTIVE', 'PASSIVE', 'SPELL'];
+                    // const standardCategory = ['ACTIVE', 'PASSIVE', 'SPELL'];
                     const allCategories = Array.from(new Set(state.skills.map(s => s.category)));
                     return allCategories.map(cat => (
                         <div key={cat}>

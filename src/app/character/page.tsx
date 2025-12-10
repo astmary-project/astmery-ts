@@ -39,7 +39,7 @@ export default function CharacterListPage() {
             }
         };
         fetchCharacters();
-    }, []);
+    }, [repository]);
 
     const handleCreateNew = async () => {
         // Get current user

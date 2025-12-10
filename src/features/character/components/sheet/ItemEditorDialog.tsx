@@ -45,7 +45,7 @@ export const ItemEditorDialog: React.FC<ItemEditorDialogProps> = ({
             const init = initialItem as any;
             const variant = init?.variants?.['default'] || {};
 
-            setItemState({
+            setItemState({ // eslint-disable-line react-hooks/set-state-in-effect
                 name: init?.name || '',
                 type: init?.slot || 'Other', // Use slot as 'type' in UI? or just type check? EquipmentItem has category='EQUIPMENT' and slot.
                 description: init?.description || '',
