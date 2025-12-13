@@ -11,6 +11,7 @@ export const CharacterEventIdSchema = UUIDSchema.brand('CharacterEventId');
 export const SessionEventIdSchema = UUIDSchema.brand('SessionEventId');
 export const SessionIdSchema = UUIDSchema.brand('SessionId');
 export const ResourceIdSchema = UUIDSchema.brand('ResourceId');
+export const BatchIdSchema = UUIDSchema.brand('BatchId');
 
 // 型も抜いておく
 export type UserId = z.infer<typeof UserIdSchema>;
@@ -22,6 +23,7 @@ export type CharacterEventId = z.infer<typeof CharacterEventIdSchema>;
 export type SessionEventId = z.infer<typeof SessionEventIdSchema>;
 export type SessionId = z.infer<typeof SessionIdSchema>;
 export type ResourceId = z.infer<typeof ResourceIdSchema>;
+export type BatchId = z.infer<typeof BatchIdSchema>;
 
 export const createId = () => crypto.randomUUID();
 
@@ -36,3 +38,5 @@ export const charEventId = (id: string) => id as CharacterEventId;
 export const sessionEventId = (id: string) => id as SessionEventId;
 export const sessionId = (id: string) => id as SessionId;
 export const resourceId = (id: string) => id as ResourceId;
+export const batchId = (id: string) => id as BatchId;
+

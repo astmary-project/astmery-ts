@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+    BatchIdSchema,
     CharacterEventIdSchema,
     CharacterIdSchema,
     ItemIdSchema,
@@ -8,27 +9,24 @@ import {
     SkillIdSchema,
 } from "../../../domain/values/ids";
 import { AcquisitionTypeSchema, FormulaSchema } from "../../../domain/values/mechanics";
-import { TimestampSchema, now } from "../../../domain/values/time";
+import { TimestampSchema } from "../../../domain/values/time";
 import { InventoryItemSchema } from "./Item";
 import { ResourceSchema } from "./Resource";
 import { SkillEntitySchema } from "./Skill";
 
-// --- 0. 共通パーツ: コンテキスト（レシート情報） ---
-// プリプレイ・アフタープレイで「一括適用」された時のグルーピング用
-export const EventContextSchema = z.object({
+// --- 0. セッションからマージイベントに持たせるコンテキスト ---
+export const SessionContextSchema = z.object({
     sessionId: SessionIdSchema.optional(),
     roomId: RoomIdSchema.optional(),
-    batchId: z.uuid().optional(),
-    appliedAt: TimestampSchema.default(now),
 });
 
 // --- 1. 共通ヘッダー（封筒） ---
 const BaseEventSchema = z.object({
     id: CharacterEventIdSchema,
     timestamp: TimestampSchema,
-    characterId: CharacterIdSchema.optional(),
+    characterId: CharacterIdSchema,
     description: z.string().optional(),
-    context: EventContextSchema.optional(),
+    batchId: BatchIdSchema,
 });
 
 // --- 2. 個別イベント定義 ---
@@ -38,19 +36,27 @@ const ExperienceGainedEventSchema = BaseEventSchema.extend({
     type: z.literal('EXPERIENCE_GAINED'),
     amount: z.number().int().min(0),
     reason: z.string().optional(),
+    sessionContext: SessionContextSchema,
 });
+
 
 const ExperienceSpentEventSchema = BaseEventSchema.extend({
     type: z.literal('EXPERIENCE_SPENT'),
     amount: z.number().int().min(0),
-    target: z.string().optional(),
+    category: z.enum(['GRADE', 'ABILITY', 'SKILL', 'OTHER']),
 });
 
-const StatGrownEventSchema = BaseEventSchema.extend({
-    type: z.literal('STAT_GROWN'),
+const GradeRaisedEventSchema = BaseEventSchema.extend({
+    type: z.literal('GRADE_RAISED'),
+    before: z.number().int().min(0),
+    after: z.number().int().min(0),
+});
+
+const AbilityRaisedEventSchema = BaseEventSchema.extend({
+    type: z.literal('ABILITY_RAISED'),
     key: z.string(),
-    delta: z.number().int().min(0),
-    cost: z.number().int().min(0).optional(),
+    before: z.number().int().min(0),
+    after: z.number().int().min(0),
 });
 
 // ■ ステータス操作系 (手動編集やバフ)
@@ -58,7 +64,7 @@ const StatUpdatedEventSchema = BaseEventSchema.extend({
     type: z.literal('STAT_UPDATED'),
     key: z.string(),
     value: FormulaSchema,
-    isMainStat: z.boolean().optional(),
+    isMain: z.boolean().optional(),
 });
 
 const ResourceDefinedEventSchema = BaseEventSchema.extend({
@@ -73,12 +79,24 @@ const StatLabelRegisteredEventSchema = BaseEventSchema.extend({
     isMain: z.boolean().default(false),
 });
 
+// ■ 金銭操作計（金銭の増減）
+const MoneyGainedEventSchema = BaseEventSchema.extend({
+    type: z.literal('MONEY_GAINED'),
+    amount: z.number().int().min(0),
+    reason: z.string().optional(),
+});
+
+const MoneySpentEventSchema = BaseEventSchema.extend({
+    type: z.literal('MONEY_SPENT'),
+    amount: z.number().int().min(0),
+    target: z.string().optional(),
+});
+
 // ■ アイテム系 (Entity)
 const ItemAddedEventSchema = BaseEventSchema.extend({
     type: z.literal('ITEM_ADDED'),
     item: InventoryItemSchema, // ★Full Entity (スナップショット)
     source: z.enum(['SHOP', 'CRAFT', 'DROP', 'EVENT', 'INITIAL']).default('EVENT'),
-    cost: z.number().optional(),
 });
 
 const ItemUpdatedEventSchema = BaseEventSchema.extend({
@@ -108,22 +126,23 @@ const ItemUnequippedEventSchema = BaseEventSchema.extend({
 });
 
 // ■ スキル系 (Entity)
+
 const SkillLearnedEventSchema = BaseEventSchema.extend({
     type: z.literal('SKILL_LEARNED'),
     skill: SkillEntitySchema,
     acquisitionMethod: AcquisitionTypeSchema,
-    cost: z.number().int().min(0).optional(),
 });
 
-const SkillUpdatedEventSchema = BaseEventSchema.extend({
-    type: z.literal('SKILL_UPDATED'),
+const SkillEvolvedEventSchema = BaseEventSchema.extend({
+    type: z.literal('SKILL_EVOLVED'),
     skillId: SkillIdSchema,
     newSkill: SkillEntitySchema,
 });
 
-const SkillForgottenEventSchema = BaseEventSchema.extend({
-    type: z.literal('SKILL_FORGOTTEN'),
+const SkillRevisedEventSchema = BaseEventSchema.extend({
+    type: z.literal('SKILL_Revised'),
     skillId: SkillIdSchema,
+    newSkill: SkillEntitySchema,
     reason: z.string().optional(),
 });
 
@@ -150,7 +169,8 @@ export const CharacterEventSchema = z.discriminatedUnion('type', [
     ExperienceGainedEventSchema,
     ExperienceSpentEventSchema,
 
-    StatGrownEventSchema,
+    GradeRaisedEventSchema,
+    AbilityRaisedEventSchema,
     StatUpdatedEventSchema,
     ResourceDefinedEventSchema,
     StatLabelRegisteredEventSchema,
@@ -162,8 +182,8 @@ export const CharacterEventSchema = z.discriminatedUnion('type', [
     ItemUnequippedEventSchema,
 
     SkillLearnedEventSchema,
-    SkillUpdatedEventSchema,
-    SkillForgottenEventSchema,
+    SkillEvolvedEventSchema,
+    SkillRevisedEventSchema,
 
     WishlistSkillAddedEventSchema,
     WishlistSkillRemovedEventSchema,
