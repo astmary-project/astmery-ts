@@ -10,6 +10,7 @@ import {
 } from "../../../domain/values/ids";
 import { AcquisitionTypeSchema, FormulaSchema } from "../../../domain/values/mechanics";
 import { TimestampSchema } from "../../../domain/values/time";
+import { CharacterEntitySchema } from "./Character";
 import { InventoryItemSchema } from "./Item";
 import { ResourceSchema } from "./Resource";
 import { SkillEntitySchema } from "./Skill";
@@ -30,6 +31,13 @@ const BaseEventSchema = z.object({
 });
 
 // --- 2. 個別イベント定義 ---
+// ■ 初期作成
+const CharacterInitializedSnapshotEventSchema = BaseEventSchema.extend({
+    type: z.literal('CHARACTER_INITIALIZED'),
+    character: CharacterEntitySchema,
+    snapshotVersion: z.number().int().min(0),
+    regulationVersion: z.number().int().min(0).optional(),
+});
 
 // ■ 経験点・成長系
 const ExperienceGainedEventSchema = BaseEventSchema.extend({
